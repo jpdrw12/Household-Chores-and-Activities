@@ -20,8 +20,8 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.jpdrw.household.data.AppPrefs
 import com.jpdrw.household.data.Repository
-import com.jpdrw.household.data.ThemePrefs
 import com.jpdrw.household.ui.activities.FamilyActivitiesScreen
 import com.jpdrw.household.ui.chores.ChoresScreen
 import com.jpdrw.household.ui.parental.ParentalActivitiesScreen
@@ -37,7 +37,7 @@ private sealed class Destination(val route: String, val label: String) {
 private val destinations = listOf(Destination.Chores, Destination.Activities, Destination.Parental, Destination.Stats)
 
 @Composable
-fun HouseholdNavHost(repository: Repository, themePrefs: ThemePrefs) {
+fun HouseholdNavHost(repository: Repository, appPrefs: AppPrefs) {
     val navController = rememberNavController()
 
     Scaffold(
@@ -78,8 +78,8 @@ fun HouseholdNavHost(repository: Repository, themePrefs: ThemePrefs) {
         ) {
             composable(Destination.Chores.route) { ChoresScreen(repository) }
             composable(Destination.Activities.route) { FamilyActivitiesScreen(repository) }
-            composable(Destination.Parental.route) { ParentalActivitiesScreen(repository) }
-            composable(Destination.Stats.route) { StatsScreen(repository, themePrefs) }
+            composable(Destination.Parental.route) { ParentalActivitiesScreen(repository, appPrefs) }
+            composable(Destination.Stats.route) { StatsScreen(repository, appPrefs) }
         }
     }
 }

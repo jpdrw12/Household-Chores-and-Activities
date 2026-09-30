@@ -30,9 +30,9 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            val themeMode by app.themePrefs.themeMode.collectAsState(initial = ThemeMode.SYSTEM)
+            val themeMode by app.appPrefs.themeMode.collectAsState(initial = ThemeMode.SYSTEM)
             HouseholdTheme(themeMode = themeMode) {
-                HouseholdNavHost(repository, app.themePrefs)
+                HouseholdNavHost(repository, app.appPrefs)
             }
         }
     }

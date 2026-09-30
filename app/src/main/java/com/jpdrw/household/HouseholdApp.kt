@@ -6,7 +6,7 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import com.jpdrw.household.data.AppDatabase
 import com.jpdrw.household.data.Repository
-import com.jpdrw.household.data.ThemePrefs
+import com.jpdrw.household.data.AppPrefs
 import com.jpdrw.household.reminders.ChoreReminderWorker
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
@@ -22,7 +22,7 @@ class HouseholdApp : Application() {
     private val applicationScope = CoroutineScope(SupervisorJob())
     val database by lazy { AppDatabase.get(this, applicationScope) }
     val repository by lazy { Repository(database) }
-    val themePrefs by lazy { ThemePrefs(this) }
+    val appPrefs by lazy { AppPrefs(this) }
 
     override fun onCreate() {
         super.onCreate()

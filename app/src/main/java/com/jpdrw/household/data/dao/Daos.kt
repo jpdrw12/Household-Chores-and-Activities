@@ -61,6 +61,9 @@ interface ChoreDao {
     @Query("SELECT * FROM chore_occurrences WHERE dueDate = :date ORDER BY id ASC")
     fun observeOccurrencesForDate(date: String): Flow<List<ChoreOccurrence>>
 
+    @Query("SELECT * FROM chore_occurrences WHERE dueDate BETWEEN :start AND :end ORDER BY id ASC")
+    fun observeOccurrencesBetween(start: String, end: String): Flow<List<ChoreOccurrence>>
+
     @Query("SELECT * FROM chore_occurrences WHERE dueDate = :date AND completed = 0 ORDER BY id ASC")
     suspend fun incompleteForDate(date: String): List<ChoreOccurrence>
 

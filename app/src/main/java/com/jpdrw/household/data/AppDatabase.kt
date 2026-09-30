@@ -141,5 +141,18 @@ private class SeedCallback(
         starterParental.forEach { (title, audience, budget) ->
             parentalDao.insert(ParentalActivity(title = title, audience = audience, budget = budget))
         }
+
+        // "Spicy" suggestions stay deliberately mild placeholders — hidden by default behind the admin toggle,
+        // and meant as a starting point the couple edits/replaces with their own, more specific ideas.
+        val starterSpicy = listOf(
+            Triple("Self-care evening, no interruptions", ParentalAudience.PERSONAL, BudgetTier.LOW),
+            Triple("Write down what you're craving from each other", ParentalAudience.PERSONAL, BudgetTier.LOW),
+            Triple("Device-free date night in", ParentalAudience.TOGETHER, BudgetTier.LOW),
+            Triple("Plan a surprise for each other", ParentalAudience.TOGETHER, BudgetTier.MEDIUM),
+            Triple("Overnight away, just the two of you", ParentalAudience.TOGETHER, BudgetTier.HIGH),
+        )
+        starterSpicy.forEach { (title, audience, budget) ->
+            parentalDao.insert(ParentalActivity(title = title, audience = audience, budget = budget, isSpicy = true))
+        }
     }
 }

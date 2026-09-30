@@ -69,6 +69,7 @@ import com.jpdrw.household.data.entity.Assignee
 import com.jpdrw.household.data.entity.Chore
 import com.jpdrw.household.data.entity.ChorePhoto
 import com.jpdrw.household.data.entity.Frequency
+import com.jpdrw.household.data.entity.Priority
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -106,10 +107,9 @@ fun ChoresScreen(repository: Repository) {
                         ChoreCard(
                             item = item,
                             repository = repository,
-                            dateIso = dateIso,
                             assignees = assignees,
                             onToggle = { checked ->
-                                scope.launch { repository.setChoreCompleted(item.chore.id, dateIso, checked, null) }
+                                scope.launch { repository.setChoreCompleted(item.chore.id, item.effectiveDueDate, checked, null) }
                             },
                             onEdit = { editingChore = item.chore },
                             onDelete = { deletingChore = item.chore },
@@ -126,8 +126,8 @@ fun ChoresScreen(repository: Repository) {
             assignees = assignees,
             initial = null,
             onDismiss = { showAddDialog = false },
-            onConfirm = { chTitle, frequency, interval, assigneeId ->
-                scope.launch { repository.addChore(chTitle, frequency, interval, assigneeId) }
+            onConfirm = { chTitle, frequency, interval, assigneeId, priority ->
+                scope.launch { repository.addChore(chTitle, frequency, interval, assigneeId, priority) }
                 showAddDialog = false
             },
         )
@@ -139,8 +139,8 @@ fun ChoresScreen(repository: Repository) {
             assignees = assignees,
             initial = chore,
             onDismiss = { editingChore = null },
-            onConfirm = { chTitle, frequency, interval, assigneeId ->
-                scope.launch { repository.updateChore(chore.id, chTitle, frequency, interval, assigneeId) }
+            onConfirm = { chTitle, frequency, interval, assigneeId, priority ->
+                scope.launch { repository.updateChore(chore.id, chTitle, frequency, interval, assigneeId, priority) }
                 editingChore = null
             },
         )
@@ -181,7 +181,6 @@ private fun DateSelector(selectedDate: LocalDate, onDateChange: (LocalDate) -> U
 private fun ChoreCard(
     item: ChoreWithOccurrence,
     repository: Repository,
-    dateIso: String,
     assignees: List<Assignee>,
     onToggle: (Boolean) -> Unit,
     onEdit: () -> Unit,
@@ -191,7 +190,7 @@ private fun ChoreCard(
     var subtasksExpanded by remember { mutableStateOf(false) }
     val completed = item.occurrence?.completed == true
     val photos by repository.observeChorePhotos(item.chore.id).collectAsState(initial = emptyList())
-    val subtasks by repository.observeSubtasks(item.chore.id, dateIso).collectAsState(initial = emptyList())
+    val subtasks by repository.observeSubtasks(item.chore.id, item.effectiveDueDate).collectAsState(initial = emptyList())
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
 
@@ -204,7 +203,17 @@ private fun ChoreCard(
         }
     }
 
-    Card(modifier = Modifier.fillMaxWidth()) {
+    val borderColor = when {
+        item.isOverdue -> MaterialTheme.colorScheme.error
+        item.chore.priority == Priority.CRITICAL -> MaterialTheme.colorScheme.error
+        item.chore.priority == Priority.HIGH -> MaterialTheme.colorScheme.tertiary
+        else -> null
+    }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        border = borderColor?.let { androidx.compose.foundation.BorderStroke(1.5.dp, it) },
+    ) {
         Column(modifier = Modifier.padding(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Checkbox(checked = completed, onCheckedChange = onToggle)
@@ -214,10 +223,22 @@ private fun ChoreCard(
                         textDecoration = if (completed) TextDecoration.LineThrough else TextDecoration.None,
                         style = MaterialTheme.typography.bodyLarge,
                     )
-                    Text(
-                        "${item.chore.frequencyLabel()} · ${item.assigneeName}",
-                        style = MaterialTheme.typography.bodySmall,
-                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            "${item.chore.frequencyLabel()} · ${item.assigneeName}",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                        if (item.isOverdue) {
+                            Text("OVERDUE", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
+                        }
+                        if (item.chore.priority != Priority.NORMAL) {
+                            Text(
+                                item.chore.priority.label(),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = if (item.chore.priority == Priority.LOW) MaterialTheme.colorScheme.onSurfaceVariant else borderColor ?: MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
                 }
                 IconButton(onClick = onEdit) { Icon(Icons.Filled.Edit, contentDescription = "Edit chore") }
                 IconButton(onClick = onDelete) { Icon(Icons.Filled.Delete, contentDescription = "Delete chore") }
@@ -261,7 +282,7 @@ private fun ChoreCard(
                             subtask = swc,
                             assignees = assignees,
                             onToggleAssignee = { assigneeId, checked ->
-                                scope.launch { repository.setSubtaskChecked(swc.subtask.id, assigneeId, dateIso, checked) }
+                                scope.launch { repository.setSubtaskChecked(swc.subtask.id, assigneeId, item.effectiveDueDate, checked) }
                             },
                             onDelete = { scope.launch { repository.deleteSubtask(swc.subtask.id) } },
                         )
@@ -347,6 +368,13 @@ private fun Chore.frequencyLabel(): String = when (frequency) {
     Frequency.CUSTOM -> "Every ${customIntervalDays ?: 1} day(s)"
 }
 
+private fun Priority.label(): String = when (this) {
+    Priority.LOW -> "Low"
+    Priority.NORMAL -> "Normal"
+    Priority.HIGH -> "High"
+    Priority.CRITICAL -> "Critical"
+}
+
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 private fun ChoreDialog(
@@ -354,11 +382,12 @@ private fun ChoreDialog(
     assignees: List<Assignee>,
     initial: Chore?,
     onDismiss: () -> Unit,
-    onConfirm: (title: String, frequency: Frequency, customIntervalDays: Int?, assigneeId: Long) -> Unit,
+    onConfirm: (title: String, frequency: Frequency, customIntervalDays: Int?, assigneeId: Long, priority: Priority) -> Unit,
 ) {
     var choreTitle by remember { mutableStateOf(initial?.title ?: "") }
     var frequency by remember { mutableStateOf(initial?.frequency ?: Frequency.WEEKLY) }
     var intervalText by remember { mutableStateOf(initial?.customIntervalDays?.toString() ?: "") }
+    var priority by remember { mutableStateOf(initial?.priority ?: Priority.NORMAL) }
     var assigneeId by remember {
         mutableStateOf(initial?.assigneeId ?: assignees.firstOrNull { it.isDefault }?.id ?: assignees.firstOrNull()?.id ?: 0L)
     }
@@ -395,6 +424,21 @@ private fun ChoreDialog(
                     )
                 }
 
+                Text("Priority", style = MaterialTheme.typography.labelLarge)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Priority.entries.forEach { p ->
+                        AssistChip(
+                            onClick = { priority = p },
+                            label = { Text(p.label()) },
+                            colors = if (priority == p) {
+                                AssistChipDefaults.assistChipColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+                            } else {
+                                AssistChipDefaults.assistChipColors()
+                            },
+                        )
+                    }
+                }
+
                 Text("Assignee", style = MaterialTheme.typography.labelLarge)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     assignees.forEach { assignee ->
@@ -416,7 +460,7 @@ private fun ChoreDialog(
             val valid = choreTitle.isNotBlank() && assigneeId != 0L && (frequency != Frequency.CUSTOM || (interval != null && interval > 0))
             Button(
                 enabled = valid,
-                onClick = { onConfirm(choreTitle.trim(), frequency, if (frequency == Frequency.CUSTOM) interval else null, assigneeId) },
+                onClick = { onConfirm(choreTitle.trim(), frequency, if (frequency == Frequency.CUSTOM) interval else null, assigneeId, priority) },
             ) { Text(if (initial == null) "Add" else "Save") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },

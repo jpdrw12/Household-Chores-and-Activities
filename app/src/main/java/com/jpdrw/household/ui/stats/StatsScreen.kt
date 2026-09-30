@@ -11,6 +11,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -23,18 +24,19 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.jpdrw.household.data.AppPrefs
 import com.jpdrw.household.data.MonthlyStats
 import com.jpdrw.household.data.Repository
 import com.jpdrw.household.data.ThemeMode
-import com.jpdrw.household.data.ThemePrefs
 import kotlinx.coroutines.launch
 
 /** Admin-only view of tracked data and app settings. Reached via the bottom nav's "Admin" tab, out of the way of daily use. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun StatsScreen(repository: Repository, themePrefs: ThemePrefs) {
+fun StatsScreen(repository: Repository, appPrefs: AppPrefs) {
     var stats by remember { mutableStateOf<MonthlyStats?>(null) }
-    val themeMode by themePrefs.themeMode.collectAsState(initial = ThemeMode.SYSTEM)
+    val themeMode by appPrefs.themeMode.collectAsState(initial = ThemeMode.SYSTEM)
+    val spicyEnabled by appPrefs.spicyContentEnabled.collectAsState(initial = false)
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(Unit) {
@@ -69,9 +71,27 @@ fun StatsScreen(repository: Repository, themePrefs: ThemePrefs) {
                 ThemeMode.entries.forEach { mode ->
                     FilterChip(
                         selected = themeMode == mode,
-                        onClick = { scope.launch { themePrefs.setThemeMode(mode) } },
+                        onClick = { scope.launch { appPrefs.setThemeMode(mode) } },
                         label = { Text(mode.label()) },
                     )
+                }
+            }
+
+            Text("Content", style = androidx.compose.material3.MaterialTheme.typography.titleMedium)
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Row(
+                    modifier = Modifier.padding(16.dp).fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Show spicy activities", style = androidx.compose.material3.MaterialTheme.typography.bodyLarge)
+                        Text(
+                            "Solo and together intimate suggestions in \"For Us\". Off by default.",
+                            style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                    Switch(checked = spicyEnabled, onCheckedChange = { scope.launch { appPrefs.setSpicyContentEnabled(it) } })
                 }
             }
 

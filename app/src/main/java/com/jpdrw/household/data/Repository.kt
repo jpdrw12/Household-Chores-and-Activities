@@ -15,6 +15,7 @@ import com.jpdrw.household.data.entity.Frequency
 import com.jpdrw.household.data.entity.ParentalActivity
 import com.jpdrw.household.data.entity.ParentalActivityLog
 import com.jpdrw.household.data.entity.ParentalAudience
+import com.jpdrw.household.data.entity.Priority
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
@@ -25,6 +26,9 @@ data class ChoreWithOccurrence(
     val chore: Chore,
     val occurrence: ChoreOccurrence?,
     val assigneeName: String,
+    /** The due date this occurrence actually belongs to — may be earlier than the viewed date if overdue. */
+    val effectiveDueDate: String,
+    val isOverdue: Boolean,
 )
 
 data class AssigneeStat(val assigneeName: String, val completed: Int)
@@ -43,6 +47,8 @@ data class MonthlyStats(
     val byAssignee: List<AssigneeStat>,
 )
 
+private const val MAX_OVERDUE_LOOKBACK_DAYS = 60
+
 /** Single access point for screens: joins Room tables and fills in "for today" rows on the fly. */
 class Repository(private val db: AppDatabase) {
 
@@ -51,43 +57,73 @@ class Repository(private val db: AppDatabase) {
     suspend fun addAssignee(name: String) = db.assigneeDao().insert(Assignee(name = name))
 
     // --- Chores ---
-    fun observeChoresForDate(date: String): Flow<List<ChoreWithOccurrence>> =
-        combine(db.choreDao().observeActive(), db.assigneeDao().observeAll(), db.choreDao().observeOccurrencesForDate(date)) { chores, assignees, occurrences ->
+
+    /**
+     * A chore appears on [date] if its most recent scheduled due date on or before [date] hasn't
+     * been completed yet — so a missed weekly/custom chore keeps showing (marked overdue) every
+     * day until it's checked off, instead of disappearing until its next scheduled date.
+     */
+    fun observeChoresForDate(date: String): Flow<List<ChoreWithOccurrence>> {
+        val day = LocalDate.parse(date)
+        val rangeStart = day.minusDays(MAX_OVERDUE_LOOKBACK_DAYS.toLong()).format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE)
+        return combine(
+            db.choreDao().observeActive(),
+            db.assigneeDao().observeAll(),
+            db.choreDao().observeOccurrencesBetween(rangeStart, date),
+        ) { chores, assignees, occurrences ->
             val assigneeNames = assignees.associateBy { it.id }
-            val occurrenceByChore = occurrences.associateBy { it.choreId }
+            val occurrenceByKey = occurrences.associateBy { it.choreId to it.dueDate }
             chores
-                .filter { isDueOn(it, date) || occurrenceByChore.containsKey(it.id) }
-                .map { chore ->
+                .mapNotNull { chore ->
+                    val lastDue = lastScheduledDateOnOrBefore(chore, day) ?: return@mapNotNull null
+                    val occurrence = occurrenceByKey[chore.id to lastDue.toString()]
+                    if (occurrence?.completed == true) return@mapNotNull null
                     ChoreWithOccurrence(
                         chore = chore,
-                        occurrence = occurrenceByChore[chore.id],
+                        occurrence = occurrence,
                         assigneeName = assigneeNames[chore.assigneeId]?.name ?: "Family",
+                        effectiveDueDate = lastDue.toString(),
+                        isOverdue = lastDue.isBefore(day),
                     )
                 }
-        }
-
-    private fun isDueOn(chore: Chore, date: String): Boolean {
-        val day = LocalDate.parse(date)
-        return when (chore.frequency) {
-            Frequency.DAILY -> true
-            Frequency.WEEKLY -> day.dayOfWeek == java.time.DayOfWeek.MONDAY
-            Frequency.TWICE_WEEKLY -> day.dayOfWeek == java.time.DayOfWeek.MONDAY || day.dayOfWeek == java.time.DayOfWeek.THURSDAY
-            Frequency.CUSTOM -> {
-                val interval = chore.customIntervalDays ?: return false
-                if (interval <= 0) return false
-                val createdDay = java.time.Instant.ofEpochMilli(chore.createdAt).atZone(java.time.ZoneId.systemDefault()).toLocalDate()
-                val daysSince = ChronoUnit.DAYS.between(createdDay, day)
-                daysSince >= 0 && daysSince % interval == 0L
-            }
+                .sortedWith(
+                    compareByDescending<ChoreWithOccurrence> { it.isOverdue }
+                        .thenByDescending { it.chore.priority.ordinal }
+                        .thenBy { it.chore.title },
+                )
         }
     }
 
-    suspend fun addChore(title: String, frequency: Frequency, customIntervalDays: Int?, assigneeId: Long) =
-        db.choreDao().insert(Chore(title = title, frequency = frequency, customIntervalDays = customIntervalDays, assigneeId = assigneeId))
+    private fun isDueOnRaw(chore: Chore, day: LocalDate): Boolean = when (chore.frequency) {
+        Frequency.DAILY -> true
+        Frequency.WEEKLY -> day.dayOfWeek == java.time.DayOfWeek.MONDAY
+        Frequency.TWICE_WEEKLY -> day.dayOfWeek == java.time.DayOfWeek.MONDAY || day.dayOfWeek == java.time.DayOfWeek.THURSDAY
+        Frequency.CUSTOM -> {
+            val interval = chore.customIntervalDays
+            val createdDay = java.time.Instant.ofEpochMilli(chore.createdAt).atZone(java.time.ZoneId.systemDefault()).toLocalDate()
+            val daysSince = ChronoUnit.DAYS.between(createdDay, day)
+            interval != null && interval > 0 && daysSince >= 0 && daysSince % interval == 0L
+        }
+    }
 
-    suspend fun updateChore(choreId: Long, title: String, frequency: Frequency, customIntervalDays: Int?, assigneeId: Long) {
+    /** Walks backward from [date] (bounded by [MAX_OVERDUE_LOOKBACK_DAYS]) to find the chore's last scheduled due date. */
+    private fun lastScheduledDateOnOrBefore(chore: Chore, date: LocalDate): LocalDate? {
+        val createdDay = java.time.Instant.ofEpochMilli(chore.createdAt).atZone(java.time.ZoneId.systemDefault()).toLocalDate()
+        var day = date
+        repeat(MAX_OVERDUE_LOOKBACK_DAYS + 1) {
+            if (day.isBefore(createdDay)) return null
+            if (isDueOnRaw(chore, day)) return day
+            day = day.minusDays(1)
+        }
+        return null
+    }
+
+    suspend fun addChore(title: String, frequency: Frequency, customIntervalDays: Int?, assigneeId: Long, priority: Priority = Priority.NORMAL) =
+        db.choreDao().insert(Chore(title = title, frequency = frequency, customIntervalDays = customIntervalDays, assigneeId = assigneeId, priority = priority))
+
+    suspend fun updateChore(choreId: Long, title: String, frequency: Frequency, customIntervalDays: Int?, assigneeId: Long, priority: Priority = Priority.NORMAL) {
         val existing = db.choreDao().findById(choreId) ?: return
-        db.choreDao().update(existing.copy(title = title, frequency = frequency, customIntervalDays = customIntervalDays, assigneeId = assigneeId))
+        db.choreDao().update(existing.copy(title = title, frequency = frequency, customIntervalDays = customIntervalDays, assigneeId = assigneeId, priority = priority))
     }
 
     suspend fun setChoreCompleted(choreId: Long, date: String, completed: Boolean, photoUri: String?) {
@@ -159,11 +195,11 @@ class Repository(private val db: AppDatabase) {
         )
     }
 
-    suspend fun addParentalActivity(title: String, audience: ParentalAudience, budget: BudgetTier) =
-        db.parentalActivityDao().insert(ParentalActivity(title = title, audience = audience, budget = budget))
+    suspend fun addParentalActivity(title: String, audience: ParentalAudience, budget: BudgetTier, isSpicy: Boolean = false) =
+        db.parentalActivityDao().insert(ParentalActivity(title = title, audience = audience, budget = budget, isSpicy = isSpicy))
 
-    suspend fun updateParentalActivity(id: Long, title: String, audience: ParentalAudience, budget: BudgetTier) =
-        db.parentalActivityDao().update(ParentalActivity(id = id, title = title, audience = audience, budget = budget))
+    suspend fun updateParentalActivity(id: Long, title: String, audience: ParentalAudience, budget: BudgetTier, isSpicy: Boolean = false) =
+        db.parentalActivityDao().update(ParentalActivity(id = id, title = title, audience = audience, budget = budget, isSpicy = isSpicy))
 
     suspend fun deleteParentalActivity(id: Long) = db.parentalActivityDao().delete(id)
 

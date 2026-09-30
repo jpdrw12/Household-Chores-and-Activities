@@ -13,6 +13,7 @@ data class Assignee(
 )
 
 enum class Frequency { DAILY, WEEKLY, TWICE_WEEKLY, CUSTOM }
+enum class Priority { LOW, NORMAL, HIGH, CRITICAL }
 
 /** A chore template, e.g. "Sweep" or "Clean bathroom". */
 @Entity(tableName = "chores")
@@ -23,6 +24,7 @@ data class Chore(
     /** Only meaningful when [frequency] is [Frequency.CUSTOM]: due every N days, counted from [createdAt]. */
     val customIntervalDays: Int? = null,
     val assigneeId: Long,
+    val priority: Priority = Priority.NORMAL,
     val active: Boolean = true,
     val createdAt: Long = System.currentTimeMillis(),
 )
@@ -124,6 +126,8 @@ data class ParentalActivity(
     val title: String,
     val audience: ParentalAudience,
     val budget: BudgetTier,
+    /** Intimate solo/together suggestion, hidden unless the admin "Show spicy activities" toggle is on. */
+    val isSpicy: Boolean = false,
     val active: Boolean = true,
 )
 

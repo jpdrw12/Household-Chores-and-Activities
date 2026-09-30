@@ -38,6 +38,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.jpdrw.household.data.AppPrefs
 import com.jpdrw.household.data.DateUtils
 import com.jpdrw.household.data.Repository
 import com.jpdrw.household.data.entity.BudgetTier
@@ -47,10 +48,11 @@ import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ParentalActivitiesScreen(repository: Repository) {
+fun ParentalActivitiesScreen(repository: Repository, appPrefs: AppPrefs) {
     val week = DateUtils.isoWeek()
     val activities by repository.observeParentalActivities().collectAsState(initial = emptyList())
     val logs by repository.observeParentalActivityLogs(week).collectAsState(initial = emptyList())
+    val spicyEnabled by appPrefs.spicyContentEnabled.collectAsState(initial = false)
     val doneIds = logs.filter { it.done }.map { it.activityId }.toSet()
     val scope = rememberCoroutineScope()
     var showAddDialog by remember { mutableStateOf(false) }
@@ -58,7 +60,7 @@ fun ParentalActivitiesScreen(repository: Repository) {
     var deletingActivity by remember { mutableStateOf<ParentalActivity?>(null) }
     var budgetFilter by remember { mutableStateOf<BudgetTier?>(null) }
 
-    val filtered = activities.filter { budgetFilter == null || it.budget == budgetFilter }
+    val filtered = activities.filter { (budgetFilter == null || it.budget == budgetFilter) && (spicyEnabled || !it.isSpicy) }
     val grouped = ParentalAudience.entries.associateWith { audience -> filtered.filter { it.audience == audience } }
 
     Scaffold(
@@ -96,8 +98,8 @@ fun ParentalActivitiesScreen(repository: Repository) {
             title = "New activity",
             initial = null,
             onDismiss = { showAddDialog = false },
-            onConfirm = { actTitle, audience, budget ->
-                scope.launch { repository.addParentalActivity(actTitle, audience, budget) }
+            onConfirm = { actTitle, audience, budget, isSpicy ->
+                scope.launch { repository.addParentalActivity(actTitle, audience, budget, isSpicy) }
                 showAddDialog = false
             },
         )
@@ -108,8 +110,8 @@ fun ParentalActivitiesScreen(repository: Repository) {
             title = "Edit activity",
             initial = activity,
             onDismiss = { editingActivity = null },
-            onConfirm = { actTitle, audience, budget ->
-                scope.launch { repository.updateParentalActivity(activity.id, actTitle, audience, budget) }
+            onConfirm = { actTitle, audience, budget, isSpicy ->
+                scope.launch { repository.updateParentalActivity(activity.id, actTitle, audience, budget, isSpicy) }
                 editingActivity = null
             },
         )
@@ -157,7 +159,10 @@ private fun ParentalRow(activity: ParentalActivity, done: Boolean, onToggle: (Bo
             Checkbox(checked = done, onCheckedChange = onToggle)
             Column(modifier = Modifier.weight(1f)) {
                 Text(activity.title)
-                Text(activity.budget.label(), style = MaterialTheme.typography.bodySmall)
+                Text(
+                    if (activity.isSpicy) "${activity.budget.label()} · 🌶 Spicy" else activity.budget.label(),
+                    style = MaterialTheme.typography.bodySmall,
+                )
             }
             IconButton(onClick = onEdit) { Icon(Icons.Filled.Edit, contentDescription = "Edit activity") }
             IconButton(onClick = onDelete) { Icon(Icons.Filled.Delete, contentDescription = "Delete activity") }
@@ -171,11 +176,12 @@ private fun ParentalActivityDialog(
     title: String,
     initial: ParentalActivity?,
     onDismiss: () -> Unit,
-    onConfirm: (String, ParentalAudience, BudgetTier) -> Unit,
+    onConfirm: (String, ParentalAudience, BudgetTier, Boolean) -> Unit,
 ) {
     var actTitle by remember { mutableStateOf(initial?.title ?: "") }
     var audience by remember { mutableStateOf(initial?.audience ?: ParentalAudience.TOGETHER) }
     var budget by remember { mutableStateOf(initial?.budget ?: BudgetTier.LOW) }
+    var isSpicy by remember { mutableStateOf(initial?.isSpicy ?: false) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -195,10 +201,14 @@ private fun ParentalActivityDialog(
                         SuggestionChip(onClick = { budget = it }, label = { Text(it.label()) })
                     }
                 }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(checked = isSpicy, onCheckedChange = { isSpicy = it })
+                    Text("🌶 Spicy (solo/together, hidden unless admin toggle is on)")
+                }
             }
         },
         confirmButton = {
-            Button(enabled = actTitle.isNotBlank(), onClick = { onConfirm(actTitle.trim(), audience, budget) }) {
+            Button(enabled = actTitle.isNotBlank(), onClick = { onConfirm(actTitle.trim(), audience, budget, isSpicy) }) {
                 Text(if (initial == null) "Add" else "Save")
             }
         },
