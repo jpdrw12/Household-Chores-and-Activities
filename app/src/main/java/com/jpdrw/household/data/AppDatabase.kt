@@ -37,7 +37,7 @@ import kotlinx.coroutines.launch
         com.jpdrw.household.data.entity.ParentalActivityLog::class,
     ],
     version = 1,
-    exportSchema = true,
+    exportSchema = false,
 )
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
@@ -56,17 +56,20 @@ abstract class AppDatabase : RoomDatabase() {
                     context.applicationContext,
                     AppDatabase::class.java,
                     "household.db",
-                ).addCallback(SeedCallback(scope)).build().also { instance = it }
+                ).addCallback(SeedCallback(scope) { instance }).build().also { instance = it }
             }
     }
 }
 
 /** Seeds the starter chores, the default "Family" assignee, and starter activity suggestions on first run. */
-private class SeedCallback(private val scope: CoroutineScope) : RoomDatabase.Callback() {
+private class SeedCallback(
+    private val scope: CoroutineScope,
+    private val getInstance: () -> AppDatabase?,
+) : RoomDatabase.Callback() {
     override fun onCreate(db: SupportSQLiteDatabase) {
         super.onCreate(db)
         scope.launch {
-            val database = instance ?: return@launch
+            val database = getInstance() ?: return@launch
             seed(database)
         }
     }

@@ -132,9 +132,9 @@ fun ParentalActivitiesScreen(repository: Repository) {
 
 @Composable
 private fun FilterChipRow(selected: BudgetTier?, onSelect: (BudgetTier?) -> Unit) {
-    AssistChip(onClick = { onSelect(null) }, label = { Text("All") })
+    AssistChip(onClick = { onSelect(null) }, label = { Text(if (selected == null) "✓ All" else "All") })
     BudgetTier.entries.forEach { tier ->
-        AssistChip(onClick = { onSelect(tier) }, label = { Text(tier.label()) })
+        AssistChip(onClick = { onSelect(tier) }, label = { Text(if (selected == tier) "✓ ${tier.label()}" else tier.label()) })
     }
 }
 
