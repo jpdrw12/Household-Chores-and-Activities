@@ -9,6 +9,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 import com.jpdrw.household.data.dao.AssigneeDao
 import com.jpdrw.household.data.dao.ChoreDao
 import com.jpdrw.household.data.dao.ChorePhotoDao
+import com.jpdrw.household.data.dao.ChoreSubtaskDao
 import com.jpdrw.household.data.dao.FamilyActivityDao
 import com.jpdrw.household.data.dao.ParentalActivityDao
 import com.jpdrw.household.data.entity.ActivityCategory
@@ -18,6 +19,8 @@ import com.jpdrw.household.data.entity.BudgetTier
 import com.jpdrw.household.data.entity.Chore
 import com.jpdrw.household.data.entity.ChoreOccurrence
 import com.jpdrw.household.data.entity.ChorePhoto
+import com.jpdrw.household.data.entity.ChoreSubtask
+import com.jpdrw.household.data.entity.ChoreSubtaskCheck
 import com.jpdrw.household.data.entity.FamilyActivity
 import com.jpdrw.household.data.entity.Frequency
 import com.jpdrw.household.data.entity.ParentalActivity
@@ -31,6 +34,8 @@ import kotlinx.coroutines.launch
         Chore::class,
         ChoreOccurrence::class,
         ChorePhoto::class,
+        ChoreSubtask::class,
+        ChoreSubtaskCheck::class,
         FamilyActivity::class,
         com.jpdrw.household.data.entity.FamilyActivityLog::class,
         ParentalActivity::class,
@@ -44,6 +49,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun assigneeDao(): AssigneeDao
     abstract fun choreDao(): ChoreDao
     abstract fun chorePhotoDao(): ChorePhotoDao
+    abstract fun choreSubtaskDao(): ChoreSubtaskDao
     abstract fun familyActivityDao(): FamilyActivityDao
     abstract fun parentalActivityDao(): ParentalActivityDao
 
@@ -92,8 +98,14 @@ private class SeedCallback(
             "Clear tops of cupboards" to Frequency.WEEKLY,
             "Do dishes" to Frequency.DAILY,
         )
+        val subtaskDao = db.choreSubtaskDao()
         starterChores.forEach { (title, freq) ->
-            choreDao.insert(Chore(title = title, frequency = freq, assigneeId = familyId))
+            val choreId = choreDao.insert(Chore(title = title, frequency = freq, assigneeId = familyId))
+            if (title == "Put clothes away") {
+                listOf("Shirts", "Pants", "Socks/underwear", "Outerwear").forEachIndexed { index, subtaskTitle ->
+                    subtaskDao.insert(com.jpdrw.household.data.entity.ChoreSubtask(choreId = choreId, title = subtaskTitle, sortOrder = index))
+                }
+            }
         }
 
         val activityDao = db.familyActivityDao()

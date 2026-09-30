@@ -21,6 +21,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AddAPhoto
+import androidx.compose.material.icons.filled.Checklist
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
@@ -63,6 +64,7 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.jpdrw.household.data.ChoreWithOccurrence
 import com.jpdrw.household.data.Repository
+import com.jpdrw.household.data.SubtaskWithChecks
 import com.jpdrw.household.data.entity.Assignee
 import com.jpdrw.household.data.entity.Chore
 import com.jpdrw.household.data.entity.ChorePhoto
@@ -104,6 +106,8 @@ fun ChoresScreen(repository: Repository) {
                         ChoreCard(
                             item = item,
                             repository = repository,
+                            dateIso = dateIso,
+                            assignees = assignees,
                             onToggle = { checked ->
                                 scope.launch { repository.setChoreCompleted(item.chore.id, dateIso, checked, null) }
                             },
@@ -177,13 +181,17 @@ private fun DateSelector(selectedDate: LocalDate, onDateChange: (LocalDate) -> U
 private fun ChoreCard(
     item: ChoreWithOccurrence,
     repository: Repository,
+    dateIso: String,
+    assignees: List<Assignee>,
     onToggle: (Boolean) -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
 ) {
     var photoExpanded by remember { mutableStateOf(false) }
+    var subtasksExpanded by remember { mutableStateOf(false) }
     val completed = item.occurrence?.completed == true
     val photos by repository.observeChorePhotos(item.chore.id).collectAsState(initial = emptyList())
+    val subtasks by repository.observeSubtasks(item.chore.id, dateIso).collectAsState(initial = emptyList())
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
 
@@ -240,6 +248,27 @@ private fun ChoreCard(
                     }
                 }
             }
+
+            TextButton(onClick = { subtasksExpanded = !subtasksExpanded }) {
+                Icon(Icons.Filled.Checklist, contentDescription = null, modifier = Modifier.size(18.dp))
+                Text(" Subtasks (${subtasks.count { it.checkedByAssigneeIds.isNotEmpty() }}/${subtasks.size})")
+                Icon(if (subtasksExpanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore, contentDescription = null)
+            }
+            AnimatedVisibility(visible = subtasksExpanded) {
+                Column {
+                    subtasks.forEach { swc ->
+                        SubtaskRow(
+                            subtask = swc,
+                            assignees = assignees,
+                            onToggleAssignee = { assigneeId, checked ->
+                                scope.launch { repository.setSubtaskChecked(swc.subtask.id, assigneeId, dateIso, checked) }
+                            },
+                            onDelete = { scope.launch { repository.deleteSubtask(swc.subtask.id) } },
+                        )
+                    }
+                    AddSubtaskRow(onAdd = { title -> scope.launch { repository.addSubtask(item.chore.id, title) } })
+                }
+            }
         }
     }
 }
@@ -256,6 +285,58 @@ private fun PhotoThumbnail(photo: ChorePhoto, onDelete: () -> Unit) {
         IconButton(onClick = onDelete, modifier = Modifier.size(20.dp)) {
             Icon(Icons.Filled.Close, contentDescription = "Remove photo", tint = MaterialTheme.colorScheme.error)
         }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun SubtaskRow(
+    subtask: SubtaskWithChecks,
+    assignees: List<Assignee>,
+    onToggleAssignee: (assigneeId: Long, checked: Boolean) -> Unit,
+    onDelete: () -> Unit,
+) {
+    Column(modifier = Modifier.padding(start = 8.dp, top = 4.dp, bottom = 4.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(subtask.subtask.title, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+            IconButton(onClick = onDelete, modifier = Modifier.size(28.dp)) {
+                Icon(Icons.Filled.Close, contentDescription = "Remove subtask", modifier = Modifier.size(16.dp))
+            }
+        }
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            assignees.forEach { assignee ->
+                val checked = assignee.id in subtask.checkedByAssigneeIds
+                AssistChip(
+                    onClick = { onToggleAssignee(assignee.id, !checked) },
+                    label = { Text(if (checked) "✓ ${assignee.name}" else assignee.name) },
+                    colors = if (checked) {
+                        AssistChipDefaults.assistChipColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
+                    } else {
+                        AssistChipDefaults.assistChipColors()
+                    },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun AddSubtaskRow(onAdd: (String) -> Unit) {
+    var text by remember { mutableStateOf("") }
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 8.dp, top = 4.dp)) {
+        OutlinedTextField(
+            value = text,
+            onValueChange = { text = it },
+            label = { Text("New subtask") },
+            singleLine = true,
+            modifier = Modifier.weight(1f),
+        )
+        IconButton(onClick = {
+            if (text.isNotBlank()) {
+                onAdd(text.trim())
+                text = ""
+            }
+        }) { Icon(Icons.Filled.Add, contentDescription = "Add subtask") }
     }
 }
 

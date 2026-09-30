@@ -41,6 +41,36 @@ data class ChorePhoto(
     val addedAt: Long = System.currentTimeMillis(),
 )
 
+/** A sub-step of a chore, e.g. "Put away shirts" under "Put clothes away". Each is checked off per-assignee, per-day. */
+@Entity(
+    tableName = "chore_subtasks",
+    foreignKeys = [
+        ForeignKey(entity = Chore::class, parentColumns = ["id"], childColumns = ["choreId"], onDelete = ForeignKey.CASCADE),
+    ],
+)
+data class ChoreSubtask(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val choreId: Long,
+    val title: String,
+    val sortOrder: Int = 0,
+)
+
+/** Records that a specific assignee checked off a specific subtask on a specific day. Row presence = checked. */
+@Entity(
+    tableName = "chore_subtask_checks",
+    foreignKeys = [
+        ForeignKey(entity = ChoreSubtask::class, parentColumns = ["id"], childColumns = ["subtaskId"], onDelete = ForeignKey.CASCADE),
+        ForeignKey(entity = Assignee::class, parentColumns = ["id"], childColumns = ["assigneeId"], onDelete = ForeignKey.CASCADE),
+    ],
+)
+data class ChoreSubtaskCheck(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val subtaskId: Long,
+    val assigneeId: Long,
+    val date: String, // ISO yyyy-MM-dd
+    val checkedAt: Long = System.currentTimeMillis(),
+)
+
 /** One occurrence of a chore due on a specific date, with completion state. */
 @Entity(
     tableName = "chore_occurrences",

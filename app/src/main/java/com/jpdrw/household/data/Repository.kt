@@ -7,6 +7,8 @@ import com.jpdrw.household.data.entity.BudgetTier
 import com.jpdrw.household.data.entity.Chore
 import com.jpdrw.household.data.entity.ChoreOccurrence
 import com.jpdrw.household.data.entity.ChorePhoto
+import com.jpdrw.household.data.entity.ChoreSubtask
+import com.jpdrw.household.data.entity.ChoreSubtaskCheck
 import com.jpdrw.household.data.entity.FamilyActivity
 import com.jpdrw.household.data.entity.FamilyActivityLog
 import com.jpdrw.household.data.entity.Frequency
@@ -26,6 +28,12 @@ data class ChoreWithOccurrence(
 )
 
 data class AssigneeStat(val assigneeName: String, val completed: Int)
+
+data class SubtaskWithChecks(
+    val subtask: ChoreSubtask,
+    /** Assignee IDs who have checked this subtask off for the date in question. */
+    val checkedByAssigneeIds: Set<Long>,
+)
 
 data class MonthlyStats(
     val choresCompleted: Int,
@@ -98,6 +106,28 @@ class Repository(private val db: AppDatabase) {
     fun observeChorePhotos(choreId: Long): Flow<List<ChorePhoto>> = db.chorePhotoDao().observeForChore(choreId)
     suspend fun addChorePhoto(choreId: Long, uri: String) = db.chorePhotoDao().insert(ChorePhoto(choreId = choreId, uri = uri))
     suspend fun deleteChorePhoto(photoId: Long) = db.chorePhotoDao().delete(photoId)
+
+    // --- Chore subtasks ---
+    fun observeSubtasks(choreId: Long, date: String): Flow<List<SubtaskWithChecks>> =
+        combine(db.choreSubtaskDao().observeForChore(choreId), db.choreSubtaskDao().observeChecksForChoreAndDate(choreId, date)) { subtasks, checks ->
+            val checksBySubtask = checks.groupBy { it.subtaskId }
+            subtasks.map { subtask ->
+                SubtaskWithChecks(subtask = subtask, checkedByAssigneeIds = checksBySubtask[subtask.id].orEmpty().map { it.assigneeId }.toSet())
+            }
+        }
+
+    suspend fun addSubtask(choreId: Long, title: String) = db.choreSubtaskDao().insert(ChoreSubtask(choreId = choreId, title = title))
+    suspend fun deleteSubtask(subtaskId: Long) = db.choreSubtaskDao().delete(subtaskId)
+
+    suspend fun setSubtaskChecked(subtaskId: Long, assigneeId: Long, date: String, checked: Boolean) {
+        val dao = db.choreSubtaskDao()
+        val existing = dao.findCheck(subtaskId, assigneeId, date)
+        if (checked && existing == null) {
+            dao.insertCheck(ChoreSubtaskCheck(subtaskId = subtaskId, assigneeId = assigneeId, date = date))
+        } else if (!checked && existing != null) {
+            dao.deleteCheck(existing.id)
+        }
+    }
 
     // --- Family activities ---
     fun observeFamilyActivities(): Flow<List<FamilyActivity>> = db.familyActivityDao().observeActive()

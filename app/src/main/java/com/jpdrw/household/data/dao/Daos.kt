@@ -10,6 +10,8 @@ import com.jpdrw.household.data.entity.Assignee
 import com.jpdrw.household.data.entity.Chore
 import com.jpdrw.household.data.entity.ChoreOccurrence
 import com.jpdrw.household.data.entity.ChorePhoto
+import com.jpdrw.household.data.entity.ChoreSubtask
+import com.jpdrw.household.data.entity.ChoreSubtaskCheck
 import com.jpdrw.household.data.entity.FamilyActivity
 import com.jpdrw.household.data.entity.FamilyActivityLog
 import com.jpdrw.household.data.entity.ParentalActivity
@@ -93,6 +95,30 @@ interface ChorePhotoDao {
 
     @Query("DELETE FROM chore_photos WHERE id = :photoId")
     suspend fun delete(photoId: Long)
+}
+
+@Dao
+interface ChoreSubtaskDao {
+    @Query("SELECT * FROM chore_subtasks WHERE choreId = :choreId ORDER BY sortOrder ASC, id ASC")
+    fun observeForChore(choreId: Long): Flow<List<ChoreSubtask>>
+
+    @Insert
+    suspend fun insert(subtask: ChoreSubtask): Long
+
+    @Query("DELETE FROM chore_subtasks WHERE id = :subtaskId")
+    suspend fun delete(subtaskId: Long)
+
+    @Query("SELECT * FROM chore_subtask_checks WHERE date = :date AND subtaskId IN (SELECT id FROM chore_subtasks WHERE choreId = :choreId)")
+    fun observeChecksForChoreAndDate(choreId: Long, date: String): Flow<List<ChoreSubtaskCheck>>
+
+    @Query("SELECT * FROM chore_subtask_checks WHERE subtaskId = :subtaskId AND assigneeId = :assigneeId AND date = :date LIMIT 1")
+    suspend fun findCheck(subtaskId: Long, assigneeId: Long, date: String): ChoreSubtaskCheck?
+
+    @Insert
+    suspend fun insertCheck(check: ChoreSubtaskCheck): Long
+
+    @Query("DELETE FROM chore_subtask_checks WHERE id = :checkId")
+    suspend fun deleteCheck(checkId: Long)
 }
 
 @Dao

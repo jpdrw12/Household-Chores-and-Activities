@@ -2,9 +2,13 @@
 
 Native Android app (Kotlin + Jetpack Compose + Room) for family chores and activities:
 
-- **Chores** — add chores, set daily/weekly/2x-weekly frequency, pick a due date, assign to
-  a family member (defaults to "Family"), check them off, and expand a photo section per
-  chore showing what "done" should look like. Seeded with starter chores on first launch.
+- **Chores** — add chores, set daily/weekly/2x-weekly/custom-interval frequency, pick a due
+  date, assign to a family member (defaults to "Family"), check them off, and expand a photo
+  section per chore showing what "done" should look like. Chores can also break down into
+  **subtasks** (e.g. "Put clothes away" → Shirts / Pants / Socks / Outerwear), each checked
+  off per-assignee per-day, so more than one person can confirm their own share of a shared
+  chore. Seeded with starter chores (and starter subtasks for "Put clothes away") on first
+  launch.
 - **Family Activities** — indoor/outdoor activities with daily checkboxes, grouped by
   time of day (start-up, mid-play, wind-down, bedtime) with the current slot highlighted
   as "Suggested now".
@@ -18,12 +22,14 @@ no cloud sync.
 
 ## Getting started
 
-Open this folder in Android Studio (Koala or newer) — it will offer to generate the
-Gradle wrapper JAR on first sync. Minimum SDK 26, target/compile SDK 34.
+Open this folder in Android Studio (Koala or newer), or build from the command line —
+the Gradle wrapper is checked in and works standalone:
 
 ```bash
-./gradlew assembleDebug   # after Android Studio has generated the wrapper jar
+./gradlew assembleDebug
 ```
+
+Minimum SDK 26, target/compile SDK 34, JDK 17.
 
 ## Project structure
 
@@ -58,4 +64,8 @@ app/src/main/java/com/jpdrw/household/
 
 - Reminder time (currently fixed at 6pm) isn't user-configurable yet.
 - No per-photo full-screen viewer — thumbnails only.
-- No undo after deleting a chore/activity.
+- No undo after deleting a chore/activity/subtask.
+- Facial recognition for auto-selecting who's checking off a task, with a manual picker
+  fallback for shared tasks — flagged as a separate future project, meaningfully larger
+  scope than anything else here (on-device ML Kit/CameraX + a per-family-member enrollment
+  flow).
