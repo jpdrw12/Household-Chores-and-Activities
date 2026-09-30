@@ -20,10 +20,25 @@ data class Chore(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val title: String,
     val frequency: Frequency,
+    /** Only meaningful when [frequency] is [Frequency.CUSTOM]: due every N days, counted from [createdAt]. */
+    val customIntervalDays: Int? = null,
     val assigneeId: Long,
-    val photoRefUri: String? = null,
     val active: Boolean = true,
     val createdAt: Long = System.currentTimeMillis(),
+)
+
+/** A reference photo attached to a chore showing what "done" should look like. A chore can have several. */
+@Entity(
+    tableName = "chore_photos",
+    foreignKeys = [
+        ForeignKey(entity = Chore::class, parentColumns = ["id"], childColumns = ["choreId"], onDelete = ForeignKey.CASCADE),
+    ],
+)
+data class ChorePhoto(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val choreId: Long,
+    val uri: String,
+    val addedAt: Long = System.currentTimeMillis(),
 )
 
 /** One occurrence of a chore due on a specific date, with completion state. */

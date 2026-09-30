@@ -9,11 +9,14 @@ import androidx.room.Update
 import com.jpdrw.household.data.entity.Assignee
 import com.jpdrw.household.data.entity.Chore
 import com.jpdrw.household.data.entity.ChoreOccurrence
+import com.jpdrw.household.data.entity.ChorePhoto
 import com.jpdrw.household.data.entity.FamilyActivity
 import com.jpdrw.household.data.entity.FamilyActivityLog
 import com.jpdrw.household.data.entity.ParentalActivity
 import com.jpdrw.household.data.entity.ParentalActivityLog
 import kotlinx.coroutines.flow.Flow
+
+data class AssigneeCompletionCount(val assigneeId: Long, val completed: Int)
 
 @Dao
 interface AssigneeDao {
@@ -32,6 +35,9 @@ interface ChoreDao {
     @Query("SELECT * FROM chores WHERE active = 1 ORDER BY title ASC")
     fun observeActive(): Flow<List<Chore>>
 
+    @Query("SELECT * FROM chores WHERE id = :choreId LIMIT 1")
+    suspend fun findById(choreId: Long): Chore?
+
     @Insert
     suspend fun insert(chore: Chore): Long
 
@@ -40,6 +46,9 @@ interface ChoreDao {
 
     @Query("UPDATE chores SET active = 0 WHERE id = :choreId")
     suspend fun deactivate(choreId: Long)
+
+    @Query("DELETE FROM chores WHERE id = :choreId")
+    suspend fun delete(choreId: Long)
 
     @Insert
     suspend fun insertOccurrence(occurrence: ChoreOccurrence): Long
@@ -50,6 +59,9 @@ interface ChoreDao {
     @Query("SELECT * FROM chore_occurrences WHERE dueDate = :date ORDER BY id ASC")
     fun observeOccurrencesForDate(date: String): Flow<List<ChoreOccurrence>>
 
+    @Query("SELECT * FROM chore_occurrences WHERE dueDate = :date AND completed = 0 ORDER BY id ASC")
+    suspend fun incompleteForDate(date: String): List<ChoreOccurrence>
+
     @Query("SELECT * FROM chore_occurrences WHERE choreId = :choreId AND dueDate = :date LIMIT 1")
     suspend fun findOccurrence(choreId: Long, date: String): ChoreOccurrence?
 
@@ -58,6 +70,29 @@ interface ChoreDao {
 
     @Query("SELECT COUNT(*) FROM chore_occurrences WHERE dueDate BETWEEN :start AND :end")
     suspend fun totalCountBetween(start: String, end: String): Int
+
+    @Query(
+        """
+        SELECT c.assigneeId AS assigneeId, COUNT(*) AS completed
+        FROM chore_occurrences o
+        JOIN chores c ON c.id = o.choreId
+        WHERE o.dueDate BETWEEN :start AND :end AND o.completed = 1
+        GROUP BY c.assigneeId
+        """,
+    )
+    suspend fun completedCountByAssignee(start: String, end: String): List<AssigneeCompletionCount>
+}
+
+@Dao
+interface ChorePhotoDao {
+    @Query("SELECT * FROM chore_photos WHERE choreId = :choreId ORDER BY addedAt ASC")
+    fun observeForChore(choreId: Long): Flow<List<ChorePhoto>>
+
+    @Insert
+    suspend fun insert(photo: ChorePhoto): Long
+
+    @Query("DELETE FROM chore_photos WHERE id = :photoId")
+    suspend fun delete(photoId: Long)
 }
 
 @Dao
@@ -67,6 +102,12 @@ interface FamilyActivityDao {
 
     @Insert
     suspend fun insert(activity: FamilyActivity): Long
+
+    @Update
+    suspend fun update(activity: FamilyActivity)
+
+    @Query("DELETE FROM family_activities WHERE id = :activityId")
+    suspend fun delete(activityId: Long)
 
     @Query("SELECT * FROM family_activity_logs WHERE date = :date")
     fun observeLogsForDate(date: String): Flow<List<FamilyActivityLog>>
@@ -88,6 +129,12 @@ interface ParentalActivityDao {
 
     @Insert
     suspend fun insert(activity: ParentalActivity): Long
+
+    @Update
+    suspend fun update(activity: ParentalActivity)
+
+    @Query("DELETE FROM parental_activities WHERE id = :activityId")
+    suspend fun delete(activityId: Long)
 
     @Query("SELECT * FROM parental_activity_logs WHERE isoWeek = :isoWeek")
     fun observeLogsForWeek(isoWeek: String): Flow<List<ParentalActivityLog>>

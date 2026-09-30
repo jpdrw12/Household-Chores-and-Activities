@@ -8,6 +8,7 @@ import androidx.room.TypeConverters
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.jpdrw.household.data.dao.AssigneeDao
 import com.jpdrw.household.data.dao.ChoreDao
+import com.jpdrw.household.data.dao.ChorePhotoDao
 import com.jpdrw.household.data.dao.FamilyActivityDao
 import com.jpdrw.household.data.dao.ParentalActivityDao
 import com.jpdrw.household.data.entity.ActivityCategory
@@ -15,6 +16,8 @@ import com.jpdrw.household.data.entity.ActivitySlot
 import com.jpdrw.household.data.entity.Assignee
 import com.jpdrw.household.data.entity.BudgetTier
 import com.jpdrw.household.data.entity.Chore
+import com.jpdrw.household.data.entity.ChoreOccurrence
+import com.jpdrw.household.data.entity.ChorePhoto
 import com.jpdrw.household.data.entity.FamilyActivity
 import com.jpdrw.household.data.entity.Frequency
 import com.jpdrw.household.data.entity.ParentalActivity
@@ -27,6 +30,7 @@ import kotlinx.coroutines.launch
         Assignee::class,
         Chore::class,
         ChoreOccurrence::class,
+        ChorePhoto::class,
         FamilyActivity::class,
         com.jpdrw.household.data.entity.FamilyActivityLog::class,
         ParentalActivity::class,
@@ -39,6 +43,7 @@ import kotlinx.coroutines.launch
 abstract class AppDatabase : RoomDatabase() {
     abstract fun assigneeDao(): AssigneeDao
     abstract fun choreDao(): ChoreDao
+    abstract fun chorePhotoDao(): ChorePhotoDao
     abstract fun familyActivityDao(): FamilyActivityDao
     abstract fun parentalActivityDao(): ParentalActivityDao
 

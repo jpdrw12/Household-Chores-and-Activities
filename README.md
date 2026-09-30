@@ -40,12 +40,22 @@ app/src/main/java/com/jpdrw/household/
   MainActivity.kt   Hosts the Compose nav graph
 ```
 
+## Since v0.1
+
+- Daily reminder notification (6pm, via WorkManager) listing any chores still unchecked
+  for the day. Requests `POST_NOTIFICATIONS` on first launch (Android 13+).
+- Chores support multiple reference photos (picked from the device gallery), shown as a
+  thumbnail strip in the collapsible photo section, each removable individually.
+- Admin · Stats now breaks chore completion down by assignee for the current month.
+- Chores and both activity lists support edit and delete from the list UI (pencil/trash
+  icons), not just add.
+- Chore frequency adds a "Custom" option: due every N days from creation date, for
+  schedules that don't fit daily/weekly/2x-weekly.
+- Admin · Stats has a Light/Dark/System appearance toggle, stored via DataStore, applied
+  app-wide independent of the OS setting.
+
 ## Ideas not yet built
 
-- Push notifications / reminders for due chores.
-- Multiple photos per chore with a full gallery viewer (currently a placeholder section).
-- Per-assignee stats (who did what) on the admin screen.
-- Editing/deleting existing chores and activities from the UI (currently add-only; retiring
-  a chore is wired in the repository but not exposed in the UI yet).
-- Custom recurrence (e.g. "every other Tuesday") beyond daily/weekly/2x-weekly.
-- Light/dark theme toggle independent of system setting.
+- Reminder time (currently fixed at 6pm) isn't user-configurable yet.
+- No per-photo full-screen viewer — thumbnails only.
+- No undo after deleting a chore/activity.

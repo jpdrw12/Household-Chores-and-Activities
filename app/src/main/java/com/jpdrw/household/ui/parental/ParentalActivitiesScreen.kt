@@ -10,6 +10,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -17,6 +20,8 @@ import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SuggestionChip
@@ -49,6 +54,8 @@ fun ParentalActivitiesScreen(repository: Repository) {
     val doneIds = logs.filter { it.done }.map { it.activityId }.toSet()
     val scope = rememberCoroutineScope()
     var showAddDialog by remember { mutableStateOf(false) }
+    var editingActivity by remember { mutableStateOf<ParentalActivity?>(null) }
+    var deletingActivity by remember { mutableStateOf<ParentalActivity?>(null) }
     var budgetFilter by remember { mutableStateOf<BudgetTier?>(null) }
 
     val filtered = activities.filter { budgetFilter == null || it.budget == budgetFilter }
@@ -68,12 +75,14 @@ fun ParentalActivitiesScreen(repository: Repository) {
                 ParentalAudience.entries.forEach { audience ->
                     val group = grouped[audience].orEmpty()
                     if (group.isNotEmpty()) {
-                        item { Text(audience.label(), style = androidx.compose.material3.MaterialTheme.typography.titleMedium) }
+                        item { Text(audience.label(), style = MaterialTheme.typography.titleMedium) }
                         items(group, key = { it.id }) { activity ->
                             ParentalRow(
                                 activity = activity,
                                 done = activity.id in doneIds,
                                 onToggle = { checked -> scope.launch { repository.setParentalActivityDone(activity.id, week, checked) } },
+                                onEdit = { editingActivity = activity },
+                                onDelete = { deletingActivity = activity },
                             )
                         }
                     }
@@ -83,10 +92,41 @@ fun ParentalActivitiesScreen(repository: Repository) {
     }
 
     if (showAddDialog) {
-        AddParentalActivityDialog(onDismiss = { showAddDialog = false }, onConfirm = { title, audience, budget ->
-            scope.launch { repository.addParentalActivity(title, audience, budget) }
-            showAddDialog = false
-        })
+        ParentalActivityDialog(
+            title = "New activity",
+            initial = null,
+            onDismiss = { showAddDialog = false },
+            onConfirm = { actTitle, audience, budget ->
+                scope.launch { repository.addParentalActivity(actTitle, audience, budget) }
+                showAddDialog = false
+            },
+        )
+    }
+
+    editingActivity?.let { activity ->
+        ParentalActivityDialog(
+            title = "Edit activity",
+            initial = activity,
+            onDismiss = { editingActivity = null },
+            onConfirm = { actTitle, audience, budget ->
+                scope.launch { repository.updateParentalActivity(activity.id, actTitle, audience, budget) }
+                editingActivity = null
+            },
+        )
+    }
+
+    deletingActivity?.let { activity ->
+        AlertDialog(
+            onDismissRequest = { deletingActivity = null },
+            title = { Text("Delete \"${activity.title}\"?") },
+            confirmButton = {
+                TextButton(onClick = {
+                    scope.launch { repository.deleteParentalActivity(activity.id) }
+                    deletingActivity = null
+                }) { Text("Delete") }
+            },
+            dismissButton = { TextButton(onClick = { deletingActivity = null }) { Text("Cancel") } },
+        )
     }
 }
 
@@ -111,34 +151,38 @@ private fun ParentalAudience.label(): String = when (this) {
 }
 
 @Composable
-private fun ParentalRow(activity: ParentalActivity, done: Boolean, onToggle: (Boolean) -> Unit) {
+private fun ParentalRow(activity: ParentalActivity, done: Boolean, onToggle: (Boolean) -> Unit, onEdit: () -> Unit, onDelete: () -> Unit) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Row(modifier = Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
             Checkbox(checked = done, onCheckedChange = onToggle)
-            Column {
+            Column(modifier = Modifier.weight(1f)) {
                 Text(activity.title)
-                Text(activity.budget.label(), style = androidx.compose.material3.MaterialTheme.typography.bodySmall)
+                Text(activity.budget.label(), style = MaterialTheme.typography.bodySmall)
             }
+            IconButton(onClick = onEdit) { Icon(Icons.Filled.Edit, contentDescription = "Edit activity") }
+            IconButton(onClick = onDelete) { Icon(Icons.Filled.Delete, contentDescription = "Delete activity") }
         }
     }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun AddParentalActivityDialog(
+private fun ParentalActivityDialog(
+    title: String,
+    initial: ParentalActivity?,
     onDismiss: () -> Unit,
     onConfirm: (String, ParentalAudience, BudgetTier) -> Unit,
 ) {
-    var title by remember { mutableStateOf("") }
-    var audience by remember { mutableStateOf(ParentalAudience.TOGETHER) }
-    var budget by remember { mutableStateOf(BudgetTier.LOW) }
+    var actTitle by remember { mutableStateOf(initial?.title ?: "") }
+    var audience by remember { mutableStateOf(initial?.audience ?: ParentalAudience.TOGETHER) }
+    var budget by remember { mutableStateOf(initial?.budget ?: BudgetTier.LOW) }
 
-    androidx.compose.material3.AlertDialog(
+    AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("New activity") },
+        title = { Text(title) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                OutlinedTextField(value = title, onValueChange = { title = it }, label = { Text("Activity name") })
+                OutlinedTextField(value = actTitle, onValueChange = { actTitle = it }, label = { Text("Activity name") })
                 Text("Audience")
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     ParentalAudience.entries.forEach {
@@ -154,7 +198,9 @@ private fun AddParentalActivityDialog(
             }
         },
         confirmButton = {
-            Button(enabled = title.isNotBlank(), onClick = { onConfirm(title.trim(), audience, budget) }) { Text("Add") }
+            Button(enabled = actTitle.isNotBlank(), onClick = { onConfirm(actTitle.trim(), audience, budget) }) {
+                Text(if (initial == null) "Add" else "Save")
+            }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
     )
