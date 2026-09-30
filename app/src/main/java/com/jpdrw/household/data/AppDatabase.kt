@@ -62,7 +62,11 @@ abstract class AppDatabase : RoomDatabase() {
                     context.applicationContext,
                     AppDatabase::class.java,
                     "household.db",
-                ).addCallback(SeedCallback(scope) { instance }).build().also { instance = it }
+                )
+                    // Pre-1.0: schema is still moving. Wipe and reseed on a mismatch instead of
+                    // writing a migration for every in-development change; revisit once released.
+                    .fallbackToDestructiveMigration()
+                    .addCallback(SeedCallback(scope) { instance }).build().also { instance = it }
             }
     }
 }
