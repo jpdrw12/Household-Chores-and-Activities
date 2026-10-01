@@ -127,8 +127,9 @@ fun StatsScreen(repository: Repository, appPrefs: AppPrefs) {
                         )
                         IconButton(
                             onClick = {
-                                if (newAssigneeName.isNotBlank()) {
-                                    scope.launch { repository.addAssignee(newAssigneeName.trim()) }
+                                val name = newAssigneeName.trim()
+                                if (name.isNotBlank()) {
+                                    scope.launch { repository.addAssignee(name) }
                                     newAssigneeName = ""
                                 }
                             },
@@ -172,7 +173,8 @@ fun StatsScreen(repository: Repository, appPrefs: AppPrefs) {
                 Button(
                     enabled = text.isNotBlank(),
                     onClick = {
-                        scope.launch { repository.renameAssignee(assignee, text.trim()) }
+                        val name = text.trim()
+                        scope.launch { repository.renameAssignee(assignee, name) }
                         renamingAssignee = null
                     },
                 ) { Text("Save") }
