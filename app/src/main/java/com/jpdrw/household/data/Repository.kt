@@ -94,6 +94,26 @@ class Repository(private val db: AppDatabase) {
         }
     }
 
+    /** Chores completed with a due date of exactly [date] — the "Completed" section on the Chores screen. */
+    fun observeCompletedChoresForDate(date: String): Flow<List<ChoreWithOccurrence>> =
+        combine(db.choreDao().observeActive(), db.assigneeDao().observeAll(), db.choreDao().observeOccurrencesForDate(date)) { chores, assignees, occurrences ->
+            val assigneeNames = assignees.associateBy { it.id }
+            val choresById = chores.associateBy { it.id }
+            occurrences
+                .filter { it.completed }
+                .mapNotNull { occurrence ->
+                    val chore = choresById[occurrence.choreId] ?: return@mapNotNull null
+                    ChoreWithOccurrence(
+                        chore = chore,
+                        occurrence = occurrence,
+                        assigneeName = assigneeNames[chore.assigneeId]?.name ?: "Family",
+                        effectiveDueDate = date,
+                        isOverdue = false,
+                    )
+                }
+                .sortedBy { it.chore.title }
+        }
+
     /**
      * True once [chore]'s estimatedEndTime has passed on [dueDate], if it's due today and has a
      * time window set. Only evaluated against the real current time, so this only bites same-day;

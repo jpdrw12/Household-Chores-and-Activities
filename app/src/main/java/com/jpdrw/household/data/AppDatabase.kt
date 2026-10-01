@@ -75,20 +75,20 @@ abstract class AppDatabase : RoomDatabase() {
 }
 
 /**
- * Seeds starter data if the database is empty. Called from HouseholdApp on every launch rather
- * than from a RoomDatabase.Callback.onCreate — that callback does not reliably fire after a
- * destructive migration recreates tables (only guaranteed on a brand-new database file), which
- * left the app with empty tables and no way to recover after a schema-version bump. Checking
- * "is it empty" directly is slower by one query but self-heals regardless of how the tables came
- * to be empty.
+ * Seeds starter data, inserting only titles that don't already exist. Called from HouseholdApp on
+ * every launch rather than from a RoomDatabase.Callback.onCreate — that callback does not reliably
+ * fire after a destructive migration recreates tables (only guaranteed on a brand-new database
+ * file), which once left the app with empty tables and no way to recover after a schema-version
+ * bump. Checking per-title also means a starter list added in a later app update reaches existing
+ * installs automatically, instead of only ever applying to a first-ever launch.
  */
 suspend fun AppDatabase.seedIfEmpty() {
-    if (assigneeDao().observeAll().first().isNotEmpty()) return
-
     val assigneeDao = assigneeDao()
-    val familyId = assigneeDao.insert(Assignee(name = "Family", isDefault = true))
+    val familyId = assigneeDao.observeAll().first().firstOrNull { it.isDefault }?.id
+        ?: assigneeDao.insert(Assignee(name = "Family", isDefault = true))
 
     val choreDao = choreDao()
+    val existingChoreTitles = choreDao.observeActive().first().map { it.title }.toSet()
     val starterChores = listOf(
         "Clean rooms/closets" to Frequency.WEEKLY,
         "Gather dirty laundry and sort it" to Frequency.WEEKLY,
@@ -101,9 +101,10 @@ suspend fun AppDatabase.seedIfEmpty() {
         "Clean counters" to Frequency.DAILY,
         "Clear tops of cupboards" to Frequency.WEEKLY,
         "Do dishes" to Frequency.DAILY,
+        "Pack lunch bags" to Frequency.DAILY,
     )
     val subtaskDao = choreSubtaskDao()
-    starterChores.forEach { (title, freq) ->
+    starterChores.filter { it.first !in existingChoreTitles }.forEach { (title, freq) ->
         val choreId = choreDao.insert(Chore(title = title, frequency = freq, assigneeId = familyId))
         if (title == "Put clothes away") {
             listOf("Shirts", "Pants", "Socks/underwear", "Outerwear").forEachIndexed { index, subtaskTitle ->
@@ -113,6 +114,7 @@ suspend fun AppDatabase.seedIfEmpty() {
     }
 
     val activityDao = familyActivityDao()
+    val existingActivityTitles = activityDao.observeActive().first().map { it.title }.toSet()
     // quickOption marks START_UP suggestions that fit a tight pre-school window; non-quick
     // START_UP options (a full walk, a bike ride) only surface on weekend/no-school mornings.
     data class StarterActivity(val title: String, val category: ActivityCategory, val slot: ActivitySlot, val quick: Boolean = false)
@@ -120,6 +122,7 @@ suspend fun AppDatabase.seedIfEmpty() {
         StarterActivity("Morning stretch/dance party", ActivityCategory.INDOOR, ActivitySlot.START_UP, quick = true),
         StarterActivity("Get-dressed race", ActivityCategory.INDOOR, ActivitySlot.START_UP, quick = true),
         StarterActivity("5-minute room tidy", ActivityCategory.INDOOR, ActivitySlot.START_UP, quick = true),
+        StarterActivity("Make breakfast", ActivityCategory.INDOOR, ActivitySlot.START_UP, quick = true),
         StarterActivity("Walk around the block", ActivityCategory.OUTDOOR, ActivitySlot.START_UP),
         StarterActivity("Bike ride before school", ActivityCategory.OUTDOOR, ActivitySlot.START_UP),
         StarterActivity("Board game", ActivityCategory.INDOOR, ActivitySlot.MID_PLAY),
@@ -131,11 +134,12 @@ suspend fun AppDatabase.seedIfEmpty() {
         StarterActivity("Bath time", ActivityCategory.INDOOR, ActivitySlot.BEDTIME),
         StarterActivity("Bedtime story", ActivityCategory.INDOOR, ActivitySlot.BEDTIME),
     )
-    starterActivities.forEach { (title, cat, slot, quick) ->
+    starterActivities.filter { it.title !in existingActivityTitles }.forEach { (title, cat, slot, quick) ->
         activityDao.insert(FamilyActivity(title = title, category = cat, slot = slot, quickOption = quick))
     }
 
     val parentalDao = parentalActivityDao()
+    val existingParentalTitles = parentalDao.observeActive().first().map { it.title }.toSet()
     val starterParental = listOf(
         Triple("Read a book / hobby time", ParentalAudience.PERSONAL, BudgetTier.LOW),
         Triple("Home workout", ParentalAudience.PERSONAL, BudgetTier.LOW),
@@ -148,20 +152,28 @@ suspend fun AppDatabase.seedIfEmpty() {
         Triple("Night out / concert", ParentalAudience.ADULT_ONLY, BudgetTier.MEDIUM),
         Triple("Weekend getaway", ParentalAudience.ADULT_ONLY, BudgetTier.HIGH),
     )
-    starterParental.forEach { (title, audience, budget) ->
+    starterParental.filter { it.first !in existingParentalTitles }.forEach { (title, audience, budget) ->
         parentalDao.insert(ParentalActivity(title = title, audience = audience, budget = budget))
     }
 
-    // "Intimate" suggestions stay deliberately mild placeholders — hidden by default behind the
-    // admin toggle, and meant as a starting point the couple edits/replaces with their own ideas.
+    // "Intimate" suggestions stay deliberately non-explicit — romantic/sensual framing rather than
+    // graphic — hidden by default behind the admin toggle, and meant as a starting point the
+    // couple edits/replaces with their own, more specific ideas.
     val starterIntimate = listOf(
         Triple("Self-care evening, no interruptions", ParentalAudience.PERSONAL, BudgetTier.LOW),
         Triple("Write down what you're craving from each other", ParentalAudience.PERSONAL, BudgetTier.LOW),
         Triple("Device-free date night in", ParentalAudience.TOGETHER, BudgetTier.LOW),
         Triple("Plan a surprise for each other", ParentalAudience.TOGETHER, BudgetTier.MEDIUM),
         Triple("Overnight away, just the two of you", ParentalAudience.TOGETHER, BudgetTier.HIGH),
+        Triple("Give each other a massage", ParentalAudience.TOGETHER, BudgetTier.LOW),
+        Triple("Slow dance in the kitchen", ParentalAudience.TOGETHER, BudgetTier.LOW),
+        Triple("Take a bath together", ParentalAudience.TOGETHER, BudgetTier.LOW),
+        Triple("Recreate your first date", ParentalAudience.TOGETHER, BudgetTier.MEDIUM),
+        Triple("Try a new adult game together", ParentalAudience.TOGETHER, BudgetTier.MEDIUM),
+        Triple("Write each other a love letter", ParentalAudience.PERSONAL, BudgetTier.LOW),
+        Triple("Book a couples massage or spa night", ParentalAudience.TOGETHER, BudgetTier.HIGH),
     )
-    starterIntimate.forEach { (title, audience, budget) ->
+    starterIntimate.filter { it.first !in existingParentalTitles }.forEach { (title, audience, budget) ->
         parentalDao.insert(ParentalActivity(title = title, audience = audience, budget = budget, isSpicy = true))
     }
 }

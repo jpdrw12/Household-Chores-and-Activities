@@ -86,10 +86,12 @@ fun ChoresScreen(repository: Repository) {
     var selectedDate by remember { mutableStateOf(LocalDate.now()) }
     val dateIso = selectedDate.format(DateTimeFormatter.ISO_LOCAL_DATE)
     val chores by repository.observeChoresForDate(dateIso).collectAsState(initial = emptyList())
+    val completedChores by repository.observeCompletedChoresForDate(dateIso).collectAsState(initial = emptyList())
     val assignees by repository.observeAssignees().collectAsState(initial = emptyList())
     var showAddDialog by remember { mutableStateOf(false) }
     var editingChore by remember { mutableStateOf<Chore?>(null) }
     var deletingChore by remember { mutableStateOf<Chore?>(null) }
+    var completedExpanded by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
     Scaffold(
@@ -102,7 +104,7 @@ fun ChoresScreen(repository: Repository) {
     ) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
             DateSelector(selectedDate = selectedDate, onDateChange = { selectedDate = it })
-            if (chores.isEmpty()) {
+            if (chores.isEmpty() && completedChores.isEmpty()) {
                 Text(
                     "No chores due on this date.",
                     modifier = Modifier.padding(24.dp),
@@ -120,6 +122,29 @@ fun ChoresScreen(repository: Repository) {
                             onEdit = { editingChore = item.chore },
                             onDelete = { deletingChore = item.chore },
                         )
+                    }
+                    if (completedChores.isNotEmpty()) {
+                        item {
+                            TextButton(onClick = { completedExpanded = !completedExpanded }) {
+                                Icon(Icons.Filled.Checklist, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Text(" Completed (${completedChores.size})")
+                                Icon(if (completedExpanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore, contentDescription = null)
+                            }
+                        }
+                        if (completedExpanded) {
+                            items(completedChores, key = { "completed_${it.chore.id}" }) { item ->
+                                ChoreCard(
+                                    item = item,
+                                    repository = repository,
+                                    assignees = assignees,
+                                    onToggle = { checked ->
+                                        scope.launch { repository.setChoreCompleted(item.chore.id, item.effectiveDueDate, checked, null) }
+                                    },
+                                    onEdit = { editingChore = item.chore },
+                                    onDelete = { deletingChore = item.chore },
+                                )
+                            }
+                        }
                     }
                 }
             }
