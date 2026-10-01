@@ -170,6 +170,21 @@ suspend fun AppDatabase.seedIfEmpty() {
             "Draw your favorite animal", "Draw a superhero", "Draw your family",
             "Draw a monster", "Draw what you want to be when you grow up", "Draw your favorite place",
         ),
+        "Board game" to listOf(
+            "Candy Land", "Chutes and Ladders", "Uno", "Memory match", "Checkers", "Jenga",
+        ),
+        "Backyard tag / ball games" to listOf(
+            "Freeze tag", "Kickball", "Catch", "Hopscotch", "Obstacle course", "Hide and seek",
+        ),
+        "Bedtime story" to listOf(
+            "Make up a story about a dragon", "Retell their favorite book in a silly voice",
+            "An animal adventure", "A story about today, but turned into an adventure",
+            "A superhero bedtime story", "Let them make up the story and you act it out",
+        ),
+        "Quiet backyard time" to listOf(
+            "Cloud-watching", "Bug hunting", "Chalk drawing", "Leaf or rock collecting",
+            "Blow bubbles", "Quiet picnic",
+        ),
     )
     starterIdeas.forEach { (activityTitle, ideas) ->
         val activity = activityDao.observeActive().first().firstOrNull { it.title == activityTitle } ?: return@forEach
