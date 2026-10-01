@@ -1,12 +1,11 @@
 package com.jpdrw.household.ui.parental
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -103,6 +102,7 @@ fun ParentalActivitiesScreen(repository: Repository, appPrefs: AppPrefs) {
                                 onEdit = { editingActivity = activity },
                                 onDelete = { deletingActivity = activity },
                                 onSaveNotes = { notes -> scope.launch { repository.updateParentalActivityNotes(activity, notes) } },
+                                onSaveSchedule = { date -> scope.launch { repository.updateParentalActivitySchedule(activity, date) } },
                             )
                         }
                     }
@@ -116,8 +116,8 @@ fun ParentalActivitiesScreen(repository: Repository, appPrefs: AppPrefs) {
             title = "New activity",
             initial = null,
             onDismiss = { showAddDialog = false },
-            onConfirm = { actTitle, audience, budget, isSpicy, scheduledDate ->
-                scope.launch { repository.addParentalActivity(actTitle, audience, budget, isSpicy, scheduledDate = scheduledDate) }
+            onConfirm = { actTitle, audience, budget, isSpicy ->
+                scope.launch { repository.addParentalActivity(actTitle, audience, budget, isSpicy) }
                 showAddDialog = false
             },
         )
@@ -128,9 +128,9 @@ fun ParentalActivitiesScreen(repository: Repository, appPrefs: AppPrefs) {
             title = "Edit activity",
             initial = activity,
             onDismiss = { editingActivity = null },
-            onConfirm = { actTitle, audience, budget, isSpicy, scheduledDate ->
+            onConfirm = { actTitle, audience, budget, isSpicy ->
                 scope.launch {
-                    repository.updateParentalActivity(activity.id, actTitle, audience, budget, isSpicy, activity.notes, scheduledDate)
+                    repository.updateParentalActivity(activity.id, actTitle, audience, budget, isSpicy, activity.notes, activity.scheduledDate)
                 }
                 editingActivity = null
             },
@@ -193,6 +193,7 @@ private fun ParentalRow(
     onEdit: () -> Unit,
     onDelete: () -> Unit,
     onSaveNotes: (String?) -> Unit,
+    onSaveSchedule: (String?) -> Unit,
 ) {
     val borderColor = when (status) {
         ScheduleStatus.OVERDUE -> MaterialTheme.colorScheme.error
@@ -223,6 +224,11 @@ private fun ParentalRow(
                 IconButton(onClick = onEdit) { Icon(Icons.Filled.Edit, contentDescription = "Edit activity") }
                 IconButton(onClick = onDelete) { Icon(Icons.Filled.Delete, contentDescription = "Delete activity") }
             }
+            DateField(
+                date = activity.scheduledDate,
+                onDateChange = onSaveSchedule,
+                modifier = Modifier.padding(start = 40.dp, end = 8.dp),
+            )
             NotesField(
                 notes = activity.notes,
                 onSave = onSaveNotes,
@@ -238,13 +244,12 @@ private fun ParentalActivityDialog(
     title: String,
     initial: ParentalActivity?,
     onDismiss: () -> Unit,
-    onConfirm: (String, ParentalAudience, BudgetTier, Boolean, String?) -> Unit,
+    onConfirm: (String, ParentalAudience, BudgetTier, Boolean) -> Unit,
 ) {
     var actTitle by remember { mutableStateOf(initial?.title ?: "") }
     var audience by remember { mutableStateOf(initial?.audience ?: ParentalAudience.TOGETHER) }
     var budget by remember { mutableStateOf(initial?.budget ?: BudgetTier.LOW) }
     var isSpicy by remember { mutableStateOf(initial?.isSpicy ?: false) }
-    var scheduledDate by remember { mutableStateOf(initial?.scheduledDate) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -268,16 +273,10 @@ private fun ParentalActivityDialog(
                     Checkbox(checked = isSpicy, onCheckedChange = { isSpicy = it })
                     Text("💞 Intimate (solo/together, hidden unless admin toggle is on)")
                 }
-                Text("Scheduled for (optional)", style = MaterialTheme.typography.labelLarge)
-                Text(
-                    "Shows as due that day, and overdue after if not done that week.",
-                    style = MaterialTheme.typography.bodySmall,
-                )
-                DateField(date = scheduledDate, onDateChange = { scheduledDate = it })
             }
         },
         confirmButton = {
-            Button(enabled = actTitle.isNotBlank(), onClick = { onConfirm(actTitle.trim(), audience, budget, isSpicy, scheduledDate) }) {
+            Button(enabled = actTitle.isNotBlank(), onClick = { onConfirm(actTitle.trim(), audience, budget, isSpicy) }) {
                 Text(if (initial == null) "Add" else "Save")
             }
         },
@@ -285,29 +284,31 @@ private fun ParentalActivityDialog(
     )
 }
 
+/** Compact, card-friendly date field matching NotesField's pattern: a button when unset, else the
+ *  date with a pencil to change it and an X to clear — no full-width text field taking up a row. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun DateField(date: String?, onDateChange: (String?) -> Unit) {
+private fun DateField(date: String?, onDateChange: (String?) -> Unit, modifier: Modifier = Modifier) {
     var showPicker by remember { mutableStateOf(false) }
     val parsed = date?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
     val pickerState = rememberDatePickerState(
         initialSelectedDateMillis = (parsed ?: LocalDate.now()).atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli(),
     )
 
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Box(modifier = Modifier.weight(1f)) {
-            OutlinedTextField(
-                value = date ?: "",
-                onValueChange = {},
-                readOnly = true,
-                label = { Text("Date") },
-                placeholder = { Text("Not set") },
-                modifier = Modifier.fillMaxWidth(),
-            )
-            Box(modifier = Modifier.matchParentSize().clickable { showPicker = true })
+    if (date != null) {
+        Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text("Scheduled: $date", style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
+            IconButton(onClick = { showPicker = true }, modifier = Modifier.size(28.dp)) {
+                Icon(Icons.Filled.Edit, contentDescription = "Change date", modifier = Modifier.size(16.dp))
+            }
+            IconButton(onClick = { onDateChange(null) }, modifier = Modifier.size(28.dp)) {
+                Icon(Icons.Filled.Close, contentDescription = "Clear date", modifier = Modifier.size(16.dp))
+            }
         }
-        if (date != null) {
-            IconButton(onClick = { onDateChange(null) }) { Icon(Icons.Filled.Close, contentDescription = "Clear date") }
+    } else {
+        TextButton(onClick = { showPicker = true }, modifier = modifier) {
+            Icon(Icons.Filled.Edit, contentDescription = null, modifier = Modifier.size(16.dp))
+            Text(" Schedule for a date")
         }
     }
 

@@ -385,6 +385,8 @@ class Repository(private val db: AppDatabase) {
     suspend fun updateChoreNotes(chore: Chore, notes: String?) = db.choreDao().update(chore.copy(notes = notes))
     suspend fun updateFamilyActivityNotes(activity: FamilyActivity, notes: String?) = db.familyActivityDao().update(activity.copy(notes = notes))
     suspend fun updateParentalActivityNotes(activity: ParentalActivity, notes: String?) = db.parentalActivityDao().update(activity.copy(notes = notes))
+    suspend fun updateParentalActivitySchedule(activity: ParentalActivity, scheduledDate: String?) =
+        db.parentalActivityDao().update(activity.copy(scheduledDate = scheduledDate))
 
     suspend fun deleteParentalActivity(id: Long) = db.parentalActivityDao().delete(id)
 
