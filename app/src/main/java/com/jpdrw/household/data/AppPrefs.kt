@@ -24,7 +24,7 @@ class AppPrefs(private val context: Context) {
         context.dataStore.edit { it[THEME_MODE_KEY] = mode.name }
     }
 
-    /** Off by default. Gates the "Spicy" (solo/together intimate) parental activity suggestions from view. */
+    /** Off by default. Gates the "Intimate" (solo/together) parental activity suggestions from view. */
     val spicyContentEnabled: Flow<Boolean> = context.dataStore.data.map { prefs -> prefs[SPICY_ENABLED_KEY] ?: false }
 
     suspend fun setSpicyContentEnabled(enabled: Boolean) {

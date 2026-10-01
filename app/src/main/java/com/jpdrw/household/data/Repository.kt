@@ -83,7 +83,7 @@ class Repository(private val db: AppDatabase) {
                         occurrence = occurrence,
                         assigneeName = assigneeNames[chore.assigneeId]?.name ?: "Family",
                         effectiveDueDate = lastDue.toString(),
-                        isOverdue = lastDue.isBefore(day),
+                        isOverdue = lastDue.isBefore(day) || isPastEstimatedEndTime(chore, lastDue),
                     )
                 }
                 .sortedWith(
@@ -92,6 +92,18 @@ class Repository(private val db: AppDatabase) {
                         .thenBy { it.chore.title },
                 )
         }
+    }
+
+    /**
+     * True once [chore]'s estimatedEndTime has passed on [dueDate], if it's due today and has a
+     * time window set. Only evaluated against the real current time, so this only bites same-day;
+     * a past due date is already overdue via the date check regardless of this.
+     */
+    private fun isPastEstimatedEndTime(chore: Chore, dueDate: LocalDate): Boolean {
+        if (dueDate != LocalDate.now()) return false
+        val endTime = chore.estimatedEndTime ?: return false
+        val parsedEnd = runCatching { java.time.LocalTime.parse(endTime) }.getOrNull() ?: return false
+        return java.time.LocalTime.now().isAfter(parsedEnd)
     }
 
     private fun isDueOnRaw(chore: Chore, day: LocalDate): Boolean = when (chore.frequency) {
@@ -118,12 +130,48 @@ class Repository(private val db: AppDatabase) {
         return null
     }
 
-    suspend fun addChore(title: String, frequency: Frequency, customIntervalDays: Int?, assigneeId: Long, priority: Priority = Priority.NORMAL) =
-        db.choreDao().insert(Chore(title = title, frequency = frequency, customIntervalDays = customIntervalDays, assigneeId = assigneeId, priority = priority))
+    suspend fun addChore(
+        title: String,
+        frequency: Frequency,
+        customIntervalDays: Int?,
+        assigneeId: Long,
+        priority: Priority = Priority.NORMAL,
+        startTime: String? = null,
+        estimatedEndTime: String? = null,
+    ) = db.choreDao().insert(
+        Chore(
+            title = title,
+            frequency = frequency,
+            customIntervalDays = customIntervalDays,
+            assigneeId = assigneeId,
+            priority = priority,
+            startTime = startTime,
+            estimatedEndTime = estimatedEndTime,
+        ),
+    )
 
-    suspend fun updateChore(choreId: Long, title: String, frequency: Frequency, customIntervalDays: Int?, assigneeId: Long, priority: Priority = Priority.NORMAL) {
+    suspend fun updateChore(
+        choreId: Long,
+        title: String,
+        frequency: Frequency,
+        customIntervalDays: Int?,
+        assigneeId: Long,
+        priority: Priority = Priority.NORMAL,
+        startTime: String? = null,
+        estimatedEndTime: String? = null,
+    ) {
         val existing = db.choreDao().findById(choreId) ?: return
-        db.choreDao().update(existing.copy(title = title, frequency = frequency, customIntervalDays = customIntervalDays, assigneeId = assigneeId, priority = priority))
+        db.choreDao().update(
+            existing.copy(
+                title = title,
+                frequency = frequency,
+                customIntervalDays = customIntervalDays,
+                assigneeId = assigneeId,
+                priority = priority,
+                startTime = startTime,
+                estimatedEndTime = estimatedEndTime,
+            ),
+        )
     }
 
     suspend fun setChoreCompleted(choreId: Long, date: String, completed: Boolean, photoUri: String?) {
@@ -176,11 +224,11 @@ class Repository(private val db: AppDatabase) {
         )
     }
 
-    suspend fun addFamilyActivity(title: String, category: ActivityCategory, slot: ActivitySlot) =
-        db.familyActivityDao().insert(FamilyActivity(title = title, category = category, slot = slot))
+    suspend fun addFamilyActivity(title: String, category: ActivityCategory, slot: ActivitySlot, quickOption: Boolean = false) =
+        db.familyActivityDao().insert(FamilyActivity(title = title, category = category, slot = slot, quickOption = quickOption))
 
-    suspend fun updateFamilyActivity(id: Long, title: String, category: ActivityCategory, slot: ActivitySlot) =
-        db.familyActivityDao().update(FamilyActivity(id = id, title = title, category = category, slot = slot))
+    suspend fun updateFamilyActivity(id: Long, title: String, category: ActivityCategory, slot: ActivitySlot, quickOption: Boolean = false) =
+        db.familyActivityDao().update(FamilyActivity(id = id, title = title, category = category, slot = slot, quickOption = quickOption))
 
     suspend fun deleteFamilyActivity(id: Long) = db.familyActivityDao().delete(id)
 

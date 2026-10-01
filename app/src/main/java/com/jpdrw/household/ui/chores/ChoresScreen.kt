@@ -5,6 +5,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -126,8 +127,8 @@ fun ChoresScreen(repository: Repository) {
             assignees = assignees,
             initial = null,
             onDismiss = { showAddDialog = false },
-            onConfirm = { chTitle, frequency, interval, assigneeId, priority ->
-                scope.launch { repository.addChore(chTitle, frequency, interval, assigneeId, priority) }
+            onConfirm = { chTitle, frequency, interval, assigneeId, priority, startTime, endTime ->
+                scope.launch { repository.addChore(chTitle, frequency, interval, assigneeId, priority, startTime, endTime) }
                 showAddDialog = false
             },
         )
@@ -139,8 +140,8 @@ fun ChoresScreen(repository: Repository) {
             assignees = assignees,
             initial = chore,
             onDismiss = { editingChore = null },
-            onConfirm = { chTitle, frequency, interval, assigneeId, priority ->
-                scope.launch { repository.updateChore(chore.id, chTitle, frequency, interval, assigneeId, priority) }
+            onConfirm = { chTitle, frequency, interval, assigneeId, priority, startTime, endTime ->
+                scope.launch { repository.updateChore(chore.id, chTitle, frequency, interval, assigneeId, priority, startTime, endTime) }
                 editingChore = null
             },
         )
@@ -225,7 +226,17 @@ private fun ChoreCard(
                     )
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            "${item.chore.frequencyLabel()} · ${item.assigneeName}",
+                            buildString {
+                                append(item.chore.frequencyLabel())
+                                append(" · ")
+                                append(item.assigneeName)
+                                if (item.chore.startTime != null || item.chore.estimatedEndTime != null) {
+                                    append(" · ")
+                                    append(item.chore.startTime ?: "?")
+                                    append("–")
+                                    append(item.chore.estimatedEndTime ?: "?")
+                                }
+                            },
                             style = MaterialTheme.typography.bodySmall,
                         )
                         if (item.isOverdue) {
@@ -382,12 +393,14 @@ private fun ChoreDialog(
     assignees: List<Assignee>,
     initial: Chore?,
     onDismiss: () -> Unit,
-    onConfirm: (title: String, frequency: Frequency, customIntervalDays: Int?, assigneeId: Long, priority: Priority) -> Unit,
+    onConfirm: (title: String, frequency: Frequency, customIntervalDays: Int?, assigneeId: Long, priority: Priority, startTime: String?, estimatedEndTime: String?) -> Unit,
 ) {
     var choreTitle by remember { mutableStateOf(initial?.title ?: "") }
     var frequency by remember { mutableStateOf(initial?.frequency ?: Frequency.WEEKLY) }
     var intervalText by remember { mutableStateOf(initial?.customIntervalDays?.toString() ?: "") }
     var priority by remember { mutableStateOf(initial?.priority ?: Priority.NORMAL) }
+    var startTime by remember { mutableStateOf(initial?.startTime) }
+    var estimatedEndTime by remember { mutableStateOf(initial?.estimatedEndTime) }
     var assigneeId by remember {
         mutableStateOf(initial?.assigneeId ?: assignees.firstOrNull { it.isDefault }?.id ?: assignees.firstOrNull()?.id ?: 0L)
     }
@@ -453,6 +466,16 @@ private fun ChoreDialog(
                         )
                     }
                 }
+
+                Text("Time window (optional)", style = MaterialTheme.typography.labelLarge)
+                Text(
+                    "Past the end time and not done, it's marked overdue the same day.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TimeField(label = "Start", time = startTime, onTimeChange = { startTime = it }, modifier = Modifier.weight(1f))
+                    TimeField(label = "Est. end", time = estimatedEndTime, onTimeChange = { estimatedEndTime = it }, modifier = Modifier.weight(1f))
+                }
             }
         },
         confirmButton = {
@@ -460,7 +483,17 @@ private fun ChoreDialog(
             val valid = choreTitle.isNotBlank() && assigneeId != 0L && (frequency != Frequency.CUSTOM || (interval != null && interval > 0))
             Button(
                 enabled = valid,
-                onClick = { onConfirm(choreTitle.trim(), frequency, if (frequency == Frequency.CUSTOM) interval else null, assigneeId, priority) },
+                onClick = {
+                    onConfirm(
+                        choreTitle.trim(),
+                        frequency,
+                        if (frequency == Frequency.CUSTOM) interval else null,
+                        assigneeId,
+                        priority,
+                        startTime,
+                        estimatedEndTime,
+                    )
+                },
             ) { Text(if (initial == null) "Add" else "Save") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
@@ -472,4 +505,49 @@ private fun Frequency.label(): String = when (this) {
     Frequency.WEEKLY -> "Weekly"
     Frequency.TWICE_WEEKLY -> "2x / week"
     Frequency.CUSTOM -> "Custom (every N days)"
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun TimeField(label: String, time: String?, onTimeChange: (String?) -> Unit, modifier: Modifier = Modifier) {
+    var showPicker by remember { mutableStateOf(false) }
+    val parsed = time?.let { runCatching { java.time.LocalTime.parse(it) }.getOrNull() }
+    val pickerState = androidx.compose.material3.rememberTimePickerState(
+        initialHour = parsed?.hour ?: 8,
+        initialMinute = parsed?.minute ?: 0,
+        is24Hour = false,
+    )
+
+    Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically) {
+        androidx.compose.foundation.layout.Box(modifier = Modifier.weight(1f)) {
+            OutlinedTextField(
+                value = time ?: "",
+                onValueChange = {},
+                readOnly = true,
+                label = { Text(label) },
+                placeholder = { Text("Not set") },
+                modifier = Modifier.fillMaxWidth(),
+            )
+            androidx.compose.foundation.layout.Box(
+                modifier = Modifier.matchParentSize().clickable { showPicker = true },
+            )
+        }
+        if (time != null) {
+            IconButton(onClick = { onTimeChange(null) }) { Icon(Icons.Filled.Close, contentDescription = "Clear $label") }
+        }
+    }
+
+    if (showPicker) {
+        AlertDialog(
+            onDismissRequest = { showPicker = false },
+            text = { androidx.compose.material3.TimePicker(state = pickerState) },
+            confirmButton = {
+                Button(onClick = {
+                    onTimeChange("%02d:%02d".format(pickerState.hour, pickerState.minute))
+                    showPicker = false
+                }) { Text("Set") }
+            },
+            dismissButton = { TextButton(onClick = { showPicker = false }) { Text("Cancel") } },
+        )
+    }
 }

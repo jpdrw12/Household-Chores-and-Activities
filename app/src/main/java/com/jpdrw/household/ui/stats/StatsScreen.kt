@@ -6,6 +6,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -44,7 +46,10 @@ fun StatsScreen(repository: Repository, appPrefs: AppPrefs) {
     }
 
     Scaffold(topBar = { TopAppBar(title = { Text("Admin · Stats") }) }) { padding ->
-        Column(modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Column(
+            modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp).verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
             Text("This month", style = androidx.compose.material3.MaterialTheme.typography.titleMedium)
             val current = stats
             if (current == null) {
@@ -85,7 +90,7 @@ fun StatsScreen(repository: Repository, appPrefs: AppPrefs) {
                     verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
-                        Text("Show spicy activities", style = androidx.compose.material3.MaterialTheme.typography.bodyLarge)
+                        Text("Show intimate activities", style = androidx.compose.material3.MaterialTheme.typography.bodyLarge)
                         Text(
                             "Solo and together intimate suggestions in \"For Us\". Off by default.",
                             style = androidx.compose.material3.MaterialTheme.typography.bodySmall,

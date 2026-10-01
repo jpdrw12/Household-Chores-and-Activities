@@ -42,6 +42,8 @@ import com.jpdrw.household.data.entity.ActivityCategory
 import com.jpdrw.household.data.entity.ActivitySlot
 import com.jpdrw.household.data.entity.FamilyActivity
 import kotlinx.coroutines.launch
+import java.time.DayOfWeek
+import java.time.LocalDate
 import java.time.LocalTime
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -56,7 +58,15 @@ fun FamilyActivitiesScreen(repository: Repository) {
     var editingActivity by remember { mutableStateOf<FamilyActivity?>(null) }
     var deletingActivity by remember { mutableStateOf<FamilyActivity?>(null) }
 
-    val grouped = ActivitySlot.entries.associateWith { slot -> activities.filter { it.slot == slot } }
+    val isSchoolMorning = LocalDate.now().dayOfWeek !in setOf(DayOfWeek.SATURDAY, DayOfWeek.SUNDAY)
+    val grouped = ActivitySlot.entries.associateWith { slot ->
+        val slotActivities = activities.filter { it.slot == slot }
+        if (slot == ActivitySlot.START_UP && isSchoolMorning) {
+            slotActivities.filter { it.quickOption }.ifEmpty { slotActivities }
+        } else {
+            slotActivities
+        }
+    }
     val currentSlot = currentTimeSlot()
 
     Scaffold(
@@ -70,10 +80,19 @@ fun FamilyActivitiesScreen(repository: Repository) {
                 val slotActivities = grouped[slot].orEmpty()
                 if (slotActivities.isNotEmpty()) {
                     item {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text(slot.label(), style = MaterialTheme.typography.titleMedium)
-                            if (slot == currentSlot) {
-                                SuggestionChip(onClick = {}, label = { Text("Suggested now") })
+                        Column {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text(slot.label(), style = MaterialTheme.typography.titleMedium)
+                                if (slot == currentSlot) {
+                                    SuggestionChip(onClick = {}, label = { Text("Suggested now") })
+                                }
+                            }
+                            if (slot == ActivitySlot.START_UP && isSchoolMorning) {
+                                Text(
+                                    "School morning — quick options only",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
                             }
                         }
                     }
@@ -96,8 +115,8 @@ fun FamilyActivitiesScreen(repository: Repository) {
             title = "New activity",
             initial = null,
             onDismiss = { showAddDialog = false },
-            onConfirm = { actTitle, category, slot ->
-                scope.launch { repository.addFamilyActivity(actTitle, category, slot) }
+            onConfirm = { actTitle, category, slot, quick ->
+                scope.launch { repository.addFamilyActivity(actTitle, category, slot, quick) }
                 showAddDialog = false
             },
         )
@@ -108,8 +127,8 @@ fun FamilyActivitiesScreen(repository: Repository) {
             title = "Edit activity",
             initial = activity,
             onDismiss = { editingActivity = null },
-            onConfirm = { actTitle, category, slot ->
-                scope.launch { repository.updateFamilyActivity(activity.id, actTitle, category, slot) }
+            onConfirm = { actTitle, category, slot, quick ->
+                scope.launch { repository.updateFamilyActivity(activity.id, actTitle, category, slot, quick) }
                 editingActivity = null
             },
         )
@@ -155,7 +174,10 @@ private fun ActivityRow(activity: FamilyActivity, done: Boolean, onToggle: (Bool
             Column(modifier = Modifier.weight(1f)) {
                 Text(activity.title)
                 Text(
-                    if (activity.category == ActivityCategory.INDOOR) "Indoor" else "Outdoor",
+                    buildString {
+                        append(if (activity.category == ActivityCategory.INDOOR) "Indoor" else "Outdoor")
+                        if (activity.quickOption) append(" · Quick")
+                    },
                     style = MaterialTheme.typography.bodySmall,
                 )
             }
@@ -171,11 +193,12 @@ private fun FamilyActivityDialog(
     title: String,
     initial: FamilyActivity?,
     onDismiss: () -> Unit,
-    onConfirm: (String, ActivityCategory, ActivitySlot) -> Unit,
+    onConfirm: (String, ActivityCategory, ActivitySlot, Boolean) -> Unit,
 ) {
     var actTitle by remember { mutableStateOf(initial?.title ?: "") }
     var category by remember { mutableStateOf(initial?.category ?: ActivityCategory.INDOOR) }
     var slot by remember { mutableStateOf(initial?.slot ?: ActivitySlot.MID_PLAY) }
+    var quickOption by remember { mutableStateOf(initial?.quickOption ?: false) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -195,10 +218,16 @@ private fun FamilyActivityDialog(
                         SuggestionChip(onClick = { slot = it }, label = { Text(it.label()) })
                     }
                 }
+                if (slot == ActivitySlot.START_UP) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(checked = quickOption, onCheckedChange = { quickOption = it })
+                        Text("Quick (fits a tight pre-school window)")
+                    }
+                }
             }
         },
         confirmButton = {
-            Button(enabled = actTitle.isNotBlank(), onClick = { onConfirm(actTitle.trim(), category, slot) }) {
+            Button(enabled = actTitle.isNotBlank(), onClick = { onConfirm(actTitle.trim(), category, slot, quickOption) }) {
                 Text(if (initial == null) "Add" else "Save")
             }
         },

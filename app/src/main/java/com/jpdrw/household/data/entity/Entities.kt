@@ -25,6 +25,11 @@ data class Chore(
     val customIntervalDays: Int? = null,
     val assigneeId: Long,
     val priority: Priority = Priority.NORMAL,
+    /** Optional time-of-day window ("HH:mm", 24h). When [estimatedEndTime] has passed on the due
+     *  date and the chore isn't done, it's marked overdue the same day instead of waiting for the
+     *  date to roll over. */
+    val startTime: String? = null,
+    val estimatedEndTime: String? = null,
     val active: Boolean = true,
     val createdAt: Long = System.currentTimeMillis(),
 )
@@ -99,6 +104,8 @@ data class FamilyActivity(
     val title: String,
     val category: ActivityCategory,
     val slot: ActivitySlot,
+    /** Fits a tight pre-school window. Gates which START_UP suggestions show on weekday mornings. */
+    val quickOption: Boolean = false,
     val active: Boolean = true,
 )
 

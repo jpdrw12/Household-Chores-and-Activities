@@ -160,7 +160,7 @@ private fun ParentalRow(activity: ParentalActivity, done: Boolean, onToggle: (Bo
             Column(modifier = Modifier.weight(1f)) {
                 Text(activity.title)
                 Text(
-                    if (activity.isSpicy) "${activity.budget.label()} · 🌶 Spicy" else activity.budget.label(),
+                    if (activity.isSpicy) "${activity.budget.label()} · 💞 Intimate" else activity.budget.label(),
                     style = MaterialTheme.typography.bodySmall,
                 )
             }
@@ -203,7 +203,7 @@ private fun ParentalActivityDialog(
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Checkbox(checked = isSpicy, onCheckedChange = { isSpicy = it })
-                    Text("🌶 Spicy (solo/together, hidden unless admin toggle is on)")
+                    Text("💞 Intimate (solo/together, hidden unless admin toggle is on)")
                 }
             }
         },

@@ -7,9 +7,11 @@ import androidx.work.WorkManager
 import com.jpdrw.household.data.AppDatabase
 import com.jpdrw.household.data.Repository
 import com.jpdrw.household.data.AppPrefs
+import com.jpdrw.household.data.seedIfEmpty
 import com.jpdrw.household.reminders.ChoreReminderWorker
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import java.time.Duration
 import java.time.LocalDateTime
 import java.time.LocalTime
@@ -20,7 +22,7 @@ private val REMINDER_TIME: LocalTime = LocalTime.of(18, 0)
 
 class HouseholdApp : Application() {
     private val applicationScope = CoroutineScope(SupervisorJob())
-    val database by lazy { AppDatabase.get(this, applicationScope) }
+    val database by lazy { AppDatabase.get(this) }
     val repository by lazy { Repository(database) }
     val appPrefs by lazy { AppPrefs(this) }
 
@@ -28,6 +30,7 @@ class HouseholdApp : Application() {
         super.onCreate()
         ChoreReminderWorker.ensureChannel(this)
         scheduleDailyReminder()
+        applicationScope.launch { database.seedIfEmpty() }
     }
 
     private fun scheduleDailyReminder() {
