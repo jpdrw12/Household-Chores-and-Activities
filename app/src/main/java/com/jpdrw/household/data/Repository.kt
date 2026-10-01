@@ -1,6 +1,7 @@
 package com.jpdrw.household.data
 
 import com.jpdrw.household.data.entity.ActivityCategory
+import com.jpdrw.household.data.entity.ActivityIdea
 import com.jpdrw.household.data.entity.ActivitySlot
 import com.jpdrw.household.data.entity.Assignee
 import com.jpdrw.household.data.entity.BudgetTier
@@ -372,6 +373,10 @@ class Repository(private val db: AppDatabase) {
         db.familyActivityDao().update(FamilyActivity(id = id, title = title, category = category, slot = slot, quickOption = quickOption, notes = notes))
 
     suspend fun deleteFamilyActivity(id: Long) = db.familyActivityDao().delete(id)
+
+    fun observeActivityIdeas(activityId: Long): Flow<List<ActivityIdea>> = db.activityIdeaDao().observeForActivity(activityId)
+    suspend fun addActivityIdea(activityId: Long, text: String) = db.activityIdeaDao().insert(ActivityIdea(activityId = activityId, text = text))
+    suspend fun deleteActivityIdea(id: Long) = db.activityIdeaDao().delete(id)
 
     // --- Parental activities ---
     fun observeParentalActivities(): Flow<List<ParentalActivity>> = db.parentalActivityDao().observeActive()

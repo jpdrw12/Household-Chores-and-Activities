@@ -130,6 +130,21 @@ data class FamilyActivity(
     val active: Boolean = true,
 )
 
+/** A suggested idea for an open-ended creative activity, e.g. "Build a castle" under
+ *  "Building blocks / Lego". Browsing inspiration, not a per-day checklist like chore subtasks. */
+@Entity(
+    tableName = "activity_ideas",
+    foreignKeys = [
+        ForeignKey(entity = FamilyActivity::class, parentColumns = ["id"], childColumns = ["activityId"], onDelete = ForeignKey.CASCADE),
+    ],
+)
+data class ActivityIdea(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val activityId: Long,
+    val text: String,
+    val sortOrder: Int = 0,
+)
+
 /** Tracks whether a given family activity was done on a given day. */
 @Entity(
     tableName = "family_activity_logs",

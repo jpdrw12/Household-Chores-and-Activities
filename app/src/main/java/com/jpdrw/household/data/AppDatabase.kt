@@ -5,6 +5,7 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
+import com.jpdrw.household.data.dao.ActivityIdeaDao
 import com.jpdrw.household.data.dao.AssigneeDao
 import com.jpdrw.household.data.dao.ChoreDao
 import com.jpdrw.household.data.dao.ChorePhotoDao
@@ -13,6 +14,7 @@ import com.jpdrw.household.data.dao.FamilyActivityDao
 import com.jpdrw.household.data.dao.ParentalActivityDao
 import com.jpdrw.household.data.dao.PlanDao
 import com.jpdrw.household.data.entity.ActivityCategory
+import com.jpdrw.household.data.entity.ActivityIdea
 import com.jpdrw.household.data.entity.ActivitySlot
 import com.jpdrw.household.data.entity.Assignee
 import com.jpdrw.household.data.entity.BudgetTier
@@ -39,6 +41,7 @@ import kotlinx.coroutines.flow.first
         ChoreSubtaskCheck::class,
         FamilyActivity::class,
         com.jpdrw.household.data.entity.FamilyActivityLog::class,
+        ActivityIdea::class,
         ParentalActivity::class,
         com.jpdrw.household.data.entity.ParentalActivityLog::class,
     ],
@@ -46,7 +49,7 @@ import kotlinx.coroutines.flow.first
     // below). Room only takes the destructive-migration path when the version number itself
     // changes — leaving it the same while the schema drifts hits a hard identity-hash crash on
     // any device with an existing install, instead of a clean wipe-and-reseed.
-    version = 7,
+    version = 8,
     exportSchema = false,
 )
 @TypeConverters(Converters::class)
@@ -57,6 +60,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun planDao(): PlanDao
     abstract fun choreSubtaskDao(): ChoreSubtaskDao
     abstract fun familyActivityDao(): FamilyActivityDao
+    abstract fun activityIdeaDao(): ActivityIdeaDao
     abstract fun parentalActivityDao(): ParentalActivityDao
 
     companion object {
@@ -151,6 +155,30 @@ suspend fun AppDatabase.seedIfEmpty() {
     )
     starterActivities.filter { it.title !in existingActivityTitles }.forEach { (title, cat, slot, quick) ->
         activityDao.insert(FamilyActivity(title = title, category = cat, slot = slot, quickOption = quick))
+    }
+
+    // Idea suggestions for open-ended creative activities — "what should we make?" prompts, not a
+    // per-day checklist. Keyed by activity title so this tops up existing installs too, same as
+    // the "Put clothes away" subtasks above.
+    val ideaDao = activityIdeaDao()
+    val starterIdeas = mapOf(
+        "Building blocks / Lego" to listOf(
+            "Build a castle", "Build a spaceship", "Build your dream house", "Build an animal",
+            "Build a vehicle", "Build the tallest tower you can",
+        ),
+        "Coloring/drawing" to listOf(
+            "Draw your favorite animal", "Draw a superhero", "Draw your family",
+            "Draw a monster", "Draw what you want to be when you grow up", "Draw your favorite place",
+        ),
+    )
+    starterIdeas.forEach { (activityTitle, ideas) ->
+        val activity = activityDao.observeActive().first().firstOrNull { it.title == activityTitle } ?: return@forEach
+        val existingIdeaTexts = ideaDao.listForActivity(activity.id).map { it.text }.toSet()
+        ideas.forEachIndexed { index, idea ->
+            if (idea !in existingIdeaTexts) {
+                ideaDao.insert(ActivityIdea(activityId = activity.id, text = idea, sortOrder = index))
+            }
+        }
     }
 
     val parentalDao = parentalActivityDao()

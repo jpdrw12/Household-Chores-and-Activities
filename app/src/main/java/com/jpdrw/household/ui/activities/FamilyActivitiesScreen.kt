@@ -1,17 +1,23 @@
 package com.jpdrw.household.ui.activities
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -21,6 +27,7 @@ import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.Text
@@ -99,6 +106,7 @@ fun FamilyActivitiesScreen(repository: Repository) {
                     items(slotActivities, key = { it.id }) { activity ->
                         ActivityRow(
                             activity = activity,
+                            repository = repository,
                             done = activity.id in doneIds,
                             onToggle = { checked -> scope.launch { repository.setFamilyActivityDone(activity.id, today, checked) } },
                             onEdit = { editingActivity = activity },
@@ -170,12 +178,17 @@ private fun ActivitySlot.label(): String = when (this) {
 @Composable
 private fun ActivityRow(
     activity: FamilyActivity,
+    repository: Repository,
     done: Boolean,
     onToggle: (Boolean) -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
     onSaveNotes: (String?) -> Unit,
 ) {
+    var ideasExpanded by remember { mutableStateOf(false) }
+    val ideas by repository.observeActivityIdeas(activity.id).collectAsState(initial = emptyList())
+    val scope = rememberCoroutineScope()
+
     Card(modifier = Modifier.fillMaxWidth()) {
         Column {
             Row(modifier = Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -196,9 +209,58 @@ private fun ActivityRow(
             com.jpdrw.household.ui.common.NotesField(
                 notes = activity.notes,
                 onSave = onSaveNotes,
-                modifier = Modifier.padding(start = 40.dp, end = 8.dp, bottom = 8.dp),
+                modifier = Modifier.padding(start = 40.dp, end = 8.dp, bottom = 4.dp),
             )
+            TextButton(onClick = { ideasExpanded = !ideasExpanded }, modifier = Modifier.padding(start = 32.dp)) {
+                Icon(Icons.Filled.Lightbulb, contentDescription = null, modifier = Modifier.size(18.dp))
+                Text(" Ideas (${ideas.size})")
+                Icon(if (ideasExpanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore, contentDescription = null)
+            }
+            AnimatedVisibility(visible = ideasExpanded) {
+                Column(modifier = Modifier.padding(start = 40.dp, end = 8.dp, bottom = 8.dp)) {
+                    if (ideas.isEmpty()) {
+                        Text(
+                            "No ideas yet — add a few suggestions for what to make.",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    } else {
+                        ideas.forEach { idea ->
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text("• ${idea.text}", style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
+                                IconButton(
+                                    onClick = { scope.launch { repository.deleteActivityIdea(idea.id) } },
+                                    modifier = Modifier.size(24.dp),
+                                ) {
+                                    Icon(Icons.Filled.Close, contentDescription = "Remove idea \"${idea.text}\"", modifier = Modifier.size(14.dp))
+                                }
+                            }
+                        }
+                    }
+                    AddIdeaRow(onAdd = { text -> scope.launch { repository.addActivityIdea(activity.id, text) } })
+                }
+            }
         }
+    }
+}
+
+@Composable
+private fun AddIdeaRow(onAdd: (String) -> Unit) {
+    var text by remember { mutableStateOf("") }
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp)) {
+        OutlinedTextField(
+            value = text,
+            onValueChange = { text = it },
+            label = { Text("New idea") },
+            singleLine = true,
+            modifier = Modifier.weight(1f),
+        )
+        IconButton(onClick = {
+            val idea = text.trim()
+            if (idea.isNotBlank()) {
+                onAdd(idea)
+                text = ""
+            }
+        }) { Icon(Icons.Filled.Add, contentDescription = "Add idea") }
     }
 }
 

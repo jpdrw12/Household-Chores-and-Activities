@@ -6,6 +6,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
+import com.jpdrw.household.data.entity.ActivityIdea
 import com.jpdrw.household.data.entity.Assignee
 import com.jpdrw.household.data.entity.Chore
 import com.jpdrw.household.data.entity.ChoreOccurrence
@@ -175,6 +176,21 @@ interface FamilyActivityDao {
 
     @Query("SELECT COUNT(*) FROM family_activity_logs WHERE date BETWEEN :start AND :end AND done = 1")
     suspend fun doneCountBetween(start: String, end: String): Int
+}
+
+@Dao
+interface ActivityIdeaDao {
+    @Query("SELECT * FROM activity_ideas WHERE activityId = :activityId ORDER BY sortOrder ASC, id ASC")
+    fun observeForActivity(activityId: Long): Flow<List<ActivityIdea>>
+
+    @Query("SELECT * FROM activity_ideas WHERE activityId = :activityId ORDER BY sortOrder ASC, id ASC")
+    suspend fun listForActivity(activityId: Long): List<ActivityIdea>
+
+    @Insert
+    suspend fun insert(idea: ActivityIdea): Long
+
+    @Query("DELETE FROM activity_ideas WHERE id = :id")
+    suspend fun delete(id: Long)
 }
 
 @Dao
