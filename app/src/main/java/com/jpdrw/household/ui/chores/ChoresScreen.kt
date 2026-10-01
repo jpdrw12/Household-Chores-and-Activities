@@ -1,8 +1,12 @@
 package com.jpdrw.household.ui.chores
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
@@ -22,6 +26,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AddAPhoto
+import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Checklist
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
@@ -204,6 +209,31 @@ private fun ChoreCard(
         }
     }
 
+    var pendingCameraUri by remember { mutableStateOf<android.net.Uri?>(null) }
+    val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { success ->
+        val uri = pendingCameraUri
+        if (success && uri != null) {
+            scope.launch { repository.addChorePhoto(item.chore.id, uri.toString()) }
+        }
+        pendingCameraUri = null
+    }
+    val cameraPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) {
+            val uri = createChorePhotoUri(context)
+            pendingCameraUri = uri
+            cameraLauncher.launch(uri)
+        }
+    }
+    val launchCamera = {
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
+            val uri = createChorePhotoUri(context)
+            pendingCameraUri = uri
+            cameraLauncher.launch(uri)
+        } else {
+            cameraPermission.launch(Manifest.permission.CAMERA)
+        }
+    }
+
     val borderColor = when {
         item.isOverdue -> MaterialTheme.colorScheme.error
         item.chore.priority == Priority.CRITICAL -> MaterialTheme.colorScheme.error
@@ -274,9 +304,15 @@ private fun ChoreCard(
                             }
                         }
                     }
-                    TextButton(onClick = { photoPicker.launch("image/*") }) {
-                        Icon(Icons.Filled.AddAPhoto, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Text(" Add photo")
+                    Row {
+                        TextButton(onClick = { launchCamera() }) {
+                            Icon(Icons.Filled.CameraAlt, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Text(" Take photo")
+                        }
+                        TextButton(onClick = { photoPicker.launch("image/*") }) {
+                            Icon(Icons.Filled.AddAPhoto, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Text(" Choose photo")
+                        }
                     }
                 }
             }
@@ -303,6 +339,13 @@ private fun ChoreCard(
             }
         }
     }
+}
+
+/** Creates a new file under files/task_photos/ (matches file_paths.xml) and returns its FileProvider uri. */
+private fun createChorePhotoUri(context: android.content.Context): android.net.Uri {
+    val dir = java.io.File(context.filesDir, "task_photos").apply { mkdirs() }
+    val file = java.io.File(dir, "chore_${System.currentTimeMillis()}.jpg")
+    return FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
 }
 
 @Composable
