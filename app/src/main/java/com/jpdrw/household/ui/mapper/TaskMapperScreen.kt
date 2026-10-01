@@ -139,12 +139,20 @@ private fun TypeStripe(type: PlanItemType, modifier: Modifier = Modifier) {
 
 @Composable
 private fun AvailableTaskCard(task: PlanTask, onClick: () -> Unit) {
-    Card(modifier = Modifier.width(150.dp).clickable(onClick = onClick)) {
+    Card(
+        modifier = Modifier.width(150.dp).clickable(onClick = onClick),
+        border = if (task.isScheduledToday) {
+            androidx.compose.foundation.BorderStroke(1.5.dp, MaterialTheme.colorScheme.tertiary)
+        } else null,
+    ) {
         Row {
             TypeStripe(task.itemType)
             Column(modifier = Modifier.padding(8.dp)) {
                 Text(task.title, style = MaterialTheme.typography.bodyMedium, maxLines = 2)
                 Text(task.subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+                if (task.isScheduledToday) {
+                    Text("SCHEDULED TODAY", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.tertiary)
+                }
             }
         }
     }
@@ -170,6 +178,9 @@ private fun ReorderablePlanList(
                     .fillMaxWidth()
                     .graphicsLayer { translationY = if (isDragging) dragOffset else 0f }
                     .zIndex(if (isDragging) 1f else 0f),
+                border = if (task.isScheduledToday) {
+                    androidx.compose.foundation.BorderStroke(1.5.dp, MaterialTheme.colorScheme.tertiary)
+                } else null,
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     TypeStripe(task.itemType)

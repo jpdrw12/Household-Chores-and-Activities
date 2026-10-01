@@ -23,6 +23,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -286,13 +287,17 @@ private fun FamilyActivityDialog(
                 Text("Category")
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     ActivityCategory.entries.forEach {
-                        SuggestionChip(onClick = { category = it }, label = { Text(it.name.lowercase().replaceFirstChar { c -> c.uppercase() }) })
+                        FilterChip(
+                            selected = category == it,
+                            onClick = { category = it },
+                            label = { Text(it.name.lowercase().replaceFirstChar { c -> c.uppercase() }) },
+                        )
                     }
                 }
                 Text("Suggest during")
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     ActivitySlot.entries.forEach {
-                        SuggestionChip(onClick = { slot = it }, label = { Text(it.label()) })
+                        FilterChip(selected = slot == it, onClick = { slot = it }, label = { Text(it.label()) })
                     }
                 }
                 if (slot == ActivitySlot.START_UP) {

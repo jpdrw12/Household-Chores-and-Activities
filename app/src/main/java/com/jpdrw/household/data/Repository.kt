@@ -50,6 +50,8 @@ data class PlanTask(
     val title: String,
     val subtitle: String,
     val isSpicy: Boolean = false,
+    /** True for a PARENTAL_ACTIVITY whose scheduledDate is today — highlighted in the Mapper roadmap. */
+    val isScheduledToday: Boolean = false,
 )
 
 private fun audienceLabel(audience: ParentalAudience): String = when (audience) {
@@ -171,7 +173,7 @@ class Repository(private val db: AppDatabase) {
             buildList {
                 chores.forEach { c -> add(PlanTask(PlanItemType.CHORE, c.chore.id, c.chore.title, c.assigneeName)) }
                 familyActs.forEach { a -> add(PlanTask(PlanItemType.FAMILY_ACTIVITY, a.id, a.title, if (a.category == ActivityCategory.INDOOR) "Indoor" else "Outdoor")) }
-                parentalActs.forEach { a -> add(PlanTask(PlanItemType.PARENTAL_ACTIVITY, a.id, a.title, audienceLabel(a.audience), isSpicy = a.isSpicy)) }
+                parentalActs.forEach { a -> add(PlanTask(PlanItemType.PARENTAL_ACTIVITY, a.id, a.title, audienceLabel(a.audience), isSpicy = a.isSpicy, isScheduledToday = a.scheduledDate == date)) }
             }.filter { (it.itemType to it.itemId) !in plannedKeys }
         }
 
@@ -197,7 +199,7 @@ class Repository(private val db: AppDatabase) {
                         PlanTask(PlanItemType.FAMILY_ACTIVITY, a.id, a.title, if (a.category == ActivityCategory.INDOOR) "Indoor" else "Outdoor")
                     }
                     PlanItemType.PARENTAL_ACTIVITY -> parentalById[entry.itemId]?.let { a ->
-                        PlanTask(PlanItemType.PARENTAL_ACTIVITY, a.id, a.title, audienceLabel(a.audience), isSpicy = a.isSpicy)
+                        PlanTask(PlanItemType.PARENTAL_ACTIVITY, a.id, a.title, audienceLabel(a.audience), isSpicy = a.isSpicy, isScheduledToday = a.scheduledDate == entry.date)
                     }
                 }
             }

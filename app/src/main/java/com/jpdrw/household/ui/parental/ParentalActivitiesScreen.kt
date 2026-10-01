@@ -272,13 +272,13 @@ private fun ParentalActivityDialog(
                 Text("Audience")
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     ParentalAudience.entries.forEach {
-                        SuggestionChip(onClick = { audience = it }, label = { Text(it.label()) })
+                        FilterChip(selected = audience == it, onClick = { audience = it }, label = { Text(it.label()) })
                     }
                 }
                 Text("Budget")
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     BudgetTier.entries.forEach {
-                        SuggestionChip(onClick = { budget = it }, label = { Text(it.label()) })
+                        FilterChip(selected = budget == it, onClick = { budget = it }, label = { Text(it.label()) })
                     }
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
