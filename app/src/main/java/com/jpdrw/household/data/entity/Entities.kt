@@ -3,11 +3,18 @@ package com.jpdrw.household.data.entity
 import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.PrimaryKey
+import java.util.UUID
 
-/** A family member or group who can be assigned a chore. "Family" is seeded as the default. */
+/** A family member or group who can be assigned a chore. "Family" is seeded as the default.
+ *
+ *  Id is a client-generated UUID string, not an autoincrement Long, so a new assignee created
+ *  offline on one device can't collide with one created offline on another device once both sync
+ *  to the same Firestore collection — see Repository's Firestore sync functions. Every other
+ *  entity still uses Room's own autoincrement Long id; this is the one entity being used as the
+ *  cross-device sync proof of concept. */
 @Entity(tableName = "assignees")
 data class Assignee(
-    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    @PrimaryKey val id: String = UUID.randomUUID().toString(),
     val name: String,
     val isDefault: Boolean = false,
 )
@@ -23,7 +30,7 @@ data class Chore(
     val frequency: Frequency,
     /** Only meaningful when [frequency] is [Frequency.CUSTOM]: due every N days, counted from [createdAt]. */
     val customIntervalDays: Int? = null,
-    val assigneeId: Long,
+    val assigneeId: String,
     val priority: Priority = Priority.NORMAL,
     /** Optional time-of-day window ("HH:mm", 24h). When [estimatedEndTime] has passed on the due
      *  date and the chore isn't done, it's marked overdue the same day instead of waiting for the
@@ -74,7 +81,7 @@ data class ChoreSubtask(
 data class ChoreSubtaskCheck(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val subtaskId: Long,
-    val assigneeId: Long,
+    val assigneeId: String,
     val date: String, // ISO yyyy-MM-dd
     val checkedAt: Long = System.currentTimeMillis(),
 )
@@ -96,7 +103,7 @@ data class ChoreOccurrence(
     /** Who actually checked this off — asked at check time since a chore assigned to "Family"
      *  could be done by anyone. Falls back to the chore's own assigneeId when null (e.g. rows
      *  completed before this field existed). */
-    val completedByAssigneeId: Long? = null,
+    val completedByAssigneeId: String? = null,
 )
 
 enum class PlanItemType { CHORE, FAMILY_ACTIVITY, PARENTAL_ACTIVITY }

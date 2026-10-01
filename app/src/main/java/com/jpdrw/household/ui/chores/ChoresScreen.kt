@@ -214,7 +214,7 @@ private fun ChoreCard(
     item: ChoreWithOccurrence,
     repository: Repository,
     assignees: List<Assignee>,
-    onToggle: (Boolean, Long?) -> Unit,
+    onToggle: (Boolean, String?) -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
 ) {
@@ -431,7 +431,7 @@ private fun PhotoThumbnail(photo: ChorePhoto, onDelete: () -> Unit) {
 private fun SubtaskRow(
     subtask: SubtaskWithChecks,
     assignees: List<Assignee>,
-    onToggleAssignee: (assigneeId: Long, checked: Boolean) -> Unit,
+    onToggleAssignee: (assigneeId: String, checked: Boolean) -> Unit,
     onDelete: () -> Unit,
 ) {
     Column(modifier = Modifier.padding(start = 8.dp, top = 4.dp, bottom = 4.dp)) {
@@ -499,7 +499,7 @@ private fun ChoreDialog(
     assignees: List<Assignee>,
     initial: Chore?,
     onDismiss: () -> Unit,
-    onConfirm: (title: String, frequency: Frequency, customIntervalDays: Int?, assigneeId: Long, priority: Priority, startTime: String?, estimatedEndTime: String?, notes: String?) -> Unit,
+    onConfirm: (title: String, frequency: Frequency, customIntervalDays: Int?, assigneeId: String, priority: Priority, startTime: String?, estimatedEndTime: String?, notes: String?) -> Unit,
 ) {
     var choreTitle by remember { mutableStateOf(initial?.title ?: "") }
     var frequency by remember { mutableStateOf(initial?.frequency ?: Frequency.WEEKLY) }
@@ -508,7 +508,7 @@ private fun ChoreDialog(
     var startTime by remember { mutableStateOf(initial?.startTime) }
     var estimatedEndTime by remember { mutableStateOf(initial?.estimatedEndTime) }
     var assigneeId by remember {
-        mutableStateOf(initial?.assigneeId ?: assignees.firstOrNull { it.isDefault }?.id ?: assignees.firstOrNull()?.id ?: 0L)
+        mutableStateOf(initial?.assigneeId ?: assignees.firstOrNull { it.isDefault }?.id ?: assignees.firstOrNull()?.id ?: "")
     }
     var frequencyMenuExpanded by remember { mutableStateOf(false) }
 
@@ -586,7 +586,7 @@ private fun ChoreDialog(
         },
         confirmButton = {
             val interval = intervalText.toIntOrNull()
-            val valid = choreTitle.isNotBlank() && assigneeId != 0L && (frequency != Frequency.CUSTOM || (interval != null && interval > 0))
+            val valid = choreTitle.isNotBlank() && assigneeId.isNotBlank() && (frequency != Frequency.CUSTOM || (interval != null && interval > 0))
             Button(
                 enabled = valid,
                 onClick = {

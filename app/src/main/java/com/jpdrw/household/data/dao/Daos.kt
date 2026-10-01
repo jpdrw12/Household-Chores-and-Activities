@@ -21,15 +21,18 @@ import com.jpdrw.household.data.entity.ParentalActivity
 import com.jpdrw.household.data.entity.ParentalActivityLog
 import kotlinx.coroutines.flow.Flow
 
-data class AssigneeCompletionCount(val assigneeId: Long, val completed: Int)
+data class AssigneeCompletionCount(val assigneeId: String, val completed: Int)
 
 @Dao
 interface AssigneeDao {
     @Query("SELECT * FROM assignees ORDER BY isDefault DESC, name ASC")
     fun observeAll(): Flow<List<Assignee>>
 
-    @Insert(onConflict = OnConflictStrategy.IGNORE)
-    suspend fun insert(assignee: Assignee): Long
+    @Query("SELECT * FROM assignees WHERE id = :id LIMIT 1")
+    suspend fun findById(id: String): Assignee?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insert(assignee: Assignee)
 
     @Update
     suspend fun update(assignee: Assignee)
@@ -38,7 +41,7 @@ interface AssigneeDao {
     suspend fun delete(assignee: Assignee)
 
     @Query("DELETE FROM assignees WHERE id = :id")
-    suspend fun deleteById(id: Long)
+    suspend fun deleteById(id: String)
 }
 
 @Dao
@@ -142,7 +145,7 @@ interface ChoreSubtaskDao {
     fun observeChecksForChoreAndDate(choreId: Long, date: String): Flow<List<ChoreSubtaskCheck>>
 
     @Query("SELECT * FROM chore_subtask_checks WHERE subtaskId = :subtaskId AND assigneeId = :assigneeId AND date = :date LIMIT 1")
-    suspend fun findCheck(subtaskId: Long, assigneeId: Long, date: String): ChoreSubtaskCheck?
+    suspend fun findCheck(subtaskId: Long, assigneeId: String, date: String): ChoreSubtaskCheck?
 
     @Insert
     suspend fun insertCheck(check: ChoreSubtaskCheck): Long

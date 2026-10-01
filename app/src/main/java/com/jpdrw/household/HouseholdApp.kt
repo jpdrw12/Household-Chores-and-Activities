@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
+import com.google.firebase.auth.FirebaseAuth
 import com.jpdrw.household.data.AppDatabase
 import com.jpdrw.household.data.Repository
 import com.jpdrw.household.data.AppPrefs
@@ -31,6 +32,24 @@ class HouseholdApp : Application() {
         ChoreReminderWorker.ensureChannel(this)
         scheduleDailyReminder()
         applicationScope.launch { database.seedIfEmpty() }
+        signInAndStartAssigneeSync()
+    }
+
+    /** Anonymous auth is enough for the proof-of-concept sync — it only needs *a* signed-in user
+     *  for Firestore's default security rules, not a real identity yet (see AssigneeSync.kt for
+     *  why that's a known limitation, not an oversight). Failure here (offline, no
+     *  google-services.json, Firebase unreachable) is swallowed: the app is local-first, so it
+     *  must keep working against Room with sync simply not running until this succeeds. */
+    private fun signInAndStartAssigneeSync() {
+        val auth = FirebaseAuth.getInstance()
+        val currentUser = auth.currentUser
+        if (currentUser != null) {
+            repository.startAssigneeSync(applicationScope)
+            return
+        }
+        auth.signInAnonymously()
+            .addOnSuccessListener { repository.startAssigneeSync(applicationScope) }
+            .addOnFailureListener { /* sync stays off; local Room usage is unaffected */ }
     }
 
     private fun scheduleDailyReminder() {

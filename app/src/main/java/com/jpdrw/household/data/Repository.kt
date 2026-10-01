@@ -41,7 +41,7 @@ data class AssigneeStat(val assigneeName: String, val completed: Int)
 data class SubtaskWithChecks(
     val subtask: ChoreSubtask,
     /** Assignee IDs who have checked this subtask off for the date in question. */
-    val checkedByAssigneeIds: Set<Long>,
+    val checkedByAssigneeIds: Set<String>,
 )
 
 data class PlanTask(
@@ -81,12 +81,35 @@ private const val MAX_OVERDUE_LOOKBACK_DAYS = 60
 
 /** Single access point for screens: joins Room tables and fills in "for today" rows on the fly. */
 class Repository(private val db: AppDatabase) {
+    private val assigneeSync = AssigneeSync(db.assigneeDao())
+
+    /** Starts mirroring the Firestore `assignees` collection into Room. Call once, after sign-in,
+     *  from HouseholdApp — see AssigneeSync's own doc comment for the sync design. */
+    fun startAssigneeSync(scope: kotlinx.coroutines.CoroutineScope) = assigneeSync.start(scope)
+
 
     // --- Assignees ---
+    // Proof-of-concept for cross-device sync: Assignee is the one entity mirrored to Firestore
+    // (see AssigneeSync below). Every local read still goes through Room as before — Firestore is
+    // purely a sync transport that keeps Room's `assignees` table in agreement across devices.
     fun observeAssignees(): Flow<List<Assignee>> = db.assigneeDao().observeAll()
-    suspend fun addAssignee(name: String) = db.assigneeDao().insert(Assignee(name = name))
-    suspend fun renameAssignee(assignee: Assignee, newName: String) = db.assigneeDao().update(assignee.copy(name = newName))
-    suspend fun deleteAssignee(id: Long) = db.assigneeDao().deleteById(id)
+
+    suspend fun addAssignee(name: String) {
+        val assignee = Assignee(name = name)
+        db.assigneeDao().insert(assignee)
+        assigneeSync.push(assignee)
+    }
+
+    suspend fun renameAssignee(assignee: Assignee, newName: String) {
+        val updated = assignee.copy(name = newName)
+        db.assigneeDao().update(updated)
+        assigneeSync.push(updated)
+    }
+
+    suspend fun deleteAssignee(id: String) {
+        db.assigneeDao().deleteById(id)
+        assigneeSync.delete(id)
+    }
 
     // --- Chores ---
 
@@ -261,7 +284,7 @@ class Repository(private val db: AppDatabase) {
         title: String,
         frequency: Frequency,
         customIntervalDays: Int?,
-        assigneeId: Long,
+        assigneeId: String,
         priority: Priority = Priority.NORMAL,
         startTime: String? = null,
         estimatedEndTime: String? = null,
@@ -284,7 +307,7 @@ class Repository(private val db: AppDatabase) {
         title: String,
         frequency: Frequency,
         customIntervalDays: Int?,
-        assigneeId: Long,
+        assigneeId: String,
         priority: Priority = Priority.NORMAL,
         startTime: String? = null,
         estimatedEndTime: String? = null,
@@ -310,7 +333,7 @@ class Repository(private val db: AppDatabase) {
         date: String,
         completed: Boolean,
         photoUri: String?,
-        completedByAssigneeId: Long? = null,
+        completedByAssigneeId: String? = null,
     ) {
         val dao = db.choreDao()
         val existing = dao.findOccurrence(choreId, date)
@@ -356,7 +379,7 @@ class Repository(private val db: AppDatabase) {
     suspend fun addSubtask(choreId: Long, title: String) = db.choreSubtaskDao().insert(ChoreSubtask(choreId = choreId, title = title))
     suspend fun deleteSubtask(subtaskId: Long) = db.choreSubtaskDao().delete(subtaskId)
 
-    suspend fun setSubtaskChecked(subtaskId: Long, assigneeId: Long, date: String, checked: Boolean) {
+    suspend fun setSubtaskChecked(subtaskId: Long, assigneeId: String, date: String, checked: Boolean) {
         val dao = db.choreSubtaskDao()
         val existing = dao.findCheck(subtaskId, assigneeId, date)
         if (checked && existing == null) {

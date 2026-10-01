@@ -137,7 +137,7 @@ fun StatsScreen(repository: Repository, appPrefs: AppPrefs) {
             }
 
             Text(
-                "Data is stored locally on this device only. No account or cloud sync.",
+                "Data is stored locally on this device. Assignees sync across devices (proof of concept); other data doesn't sync yet.",
                 style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
             )
         }

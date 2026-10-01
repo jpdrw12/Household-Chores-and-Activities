@@ -49,7 +49,7 @@ import kotlinx.coroutines.flow.first
     // below). Room only takes the destructive-migration path when the version number itself
     // changes — leaving it the same while the schema drifts hits a hard identity-hash crash on
     // any device with an existing install, instead of a clean wipe-and-reseed.
-    version = 8,
+    version = 9,
     exportSchema = false,
 )
 @TypeConverters(Converters::class)
@@ -93,7 +93,7 @@ abstract class AppDatabase : RoomDatabase() {
 suspend fun AppDatabase.seedIfEmpty() {
     val assigneeDao = assigneeDao()
     val familyId = assigneeDao.observeAll().first().firstOrNull { it.isDefault }?.id
-        ?: assigneeDao.insert(Assignee(name = "Family", isDefault = true))
+        ?: Assignee(name = "Family", isDefault = true).also { assigneeDao.insert(it) }.id
 
     val choreDao = choreDao()
     val existingChoreTitles = choreDao.observeActive().first().map { it.title }.toSet()
