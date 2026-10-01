@@ -47,9 +47,15 @@ class HouseholdApp : Application() {
             repository.startAssigneeSync(applicationScope)
             return
         }
+        android.util.Log.d("HouseholdApp", "signing in anonymously...")
         auth.signInAnonymously()
-            .addOnSuccessListener { repository.startAssigneeSync(applicationScope) }
-            .addOnFailureListener { /* sync stays off; local Room usage is unaffected */ }
+            .addOnSuccessListener {
+                android.util.Log.d("HouseholdApp", "sign-in success, starting sync")
+                repository.startAssigneeSync(applicationScope)
+            }
+            .addOnFailureListener {
+                android.util.Log.e("HouseholdApp", "sign-in failed", it)
+            }
     }
 
     private fun scheduleDailyReminder() {
