@@ -153,6 +153,9 @@ data class ParentalActivity(
     /** Intimate solo/together suggestion, hidden unless the admin "Show spicy activities" toggle is on. */
     val isSpicy: Boolean = false,
     val notes: String? = null,
+    /** Optional date (ISO yyyy-MM-dd) this should happen by. Shown as active/critical that day,
+     *  and overdue (if not done that week) after it passes. */
+    val scheduledDate: String? = null,
     val active: Boolean = true,
 )
 

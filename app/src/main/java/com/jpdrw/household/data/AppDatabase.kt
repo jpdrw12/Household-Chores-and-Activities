@@ -46,7 +46,7 @@ import kotlinx.coroutines.flow.first
     // below). Room only takes the destructive-migration path when the version number itself
     // changes — leaving it the same while the schema drifts hits a hard identity-hash crash on
     // any device with an existing install, instead of a clean wipe-and-reseed.
-    version = 5,
+    version = 6,
     exportSchema = false,
 )
 @TypeConverters(Converters::class)

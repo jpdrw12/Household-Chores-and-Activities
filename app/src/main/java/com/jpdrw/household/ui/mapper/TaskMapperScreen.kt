@@ -1,18 +1,21 @@
 package com.jpdrw.household.ui.mapper
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -20,6 +23,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DragHandle
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -35,6 +39,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
@@ -53,31 +58,41 @@ import kotlinx.coroutines.launch
  * in. Independent of completion state — the point is sequencing, not tracking what's done (that's
  * the Chores/Activities/For Us tabs).
  */
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TaskMapperScreen(repository: Repository, appPrefs: AppPrefs) {
     val today = DateUtils.today()
     val spicyEnabled by appPrefs.spicyContentEnabled.collectAsState(initial = false)
     val availableRaw by repository.observeAvailableForPlan(today).collectAsState(initial = emptyList())
     val plannedRaw by repository.observeDayPlan(today).collectAsState(initial = emptyList())
-    val available = availableRaw.filter { spicyEnabled || !it.isSpicy }
     val planned = plannedRaw.filter { spicyEnabled || !it.isSpicy }
+    var typeFilter by remember { mutableStateOf<PlanItemType?>(null) }
+    val available = availableRaw
+        .filter { spicyEnabled || !it.isSpicy }
+        .filter { typeFilter == null || it.itemType == typeFilter }
     val scope = rememberCoroutineScope()
 
     Scaffold(topBar = { TopAppBar(title = { Text("Day Roadmap") }) }) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp).verticalScroll(rememberScrollState())) {
             Text("Available tasks", style = MaterialTheme.typography.titleMedium)
-            Text(
-                "Tap a task to add it to today's roadmap.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 8.dp)) {
+                FilterChip(selected = typeFilter == null, onClick = { typeFilter = null }, label = { Text("All") })
+                PlanItemType.entries.forEach { type ->
+                    FilterChip(selected = typeFilter == type, onClick = { typeFilter = type }, label = { Text(type.label()) })
+                }
+            }
+
             Spacer(modifier = Modifier.padding(top = 8.dp))
             if (available.isEmpty()) {
-                Text("Everything available today is already in the roadmap.", style = MaterialTheme.typography.bodySmall)
+                Text(
+                    "Nothing available in this filter — already in the roadmap, or try a different tab above.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             } else {
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    available.forEach { task ->
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    items(available, key = { it.itemType.name + it.itemId }) { task ->
                         AvailableTaskCard(task = task, onClick = { scope.launch { repository.addToPlan(today, task.itemType, task.itemId) } })
                     }
                 }
@@ -87,7 +102,7 @@ fun TaskMapperScreen(repository: Repository, appPrefs: AppPrefs) {
             Text("Today's roadmap", style = MaterialTheme.typography.titleMedium)
             if (planned.isEmpty()) {
                 Text(
-                    "Add tasks above, then long-press the handle to drag them into order.",
+                    "Tap a task above, then long-press the ≡ handle to drag it into order.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 8.dp),
@@ -104,18 +119,33 @@ fun TaskMapperScreen(repository: Repository, appPrefs: AppPrefs) {
 }
 
 private fun PlanItemType.label(): String = when (this) {
-    PlanItemType.CHORE -> "Chore"
-    PlanItemType.FAMILY_ACTIVITY -> "Activity"
+    PlanItemType.CHORE -> "Chores"
+    PlanItemType.FAMILY_ACTIVITY -> "Activities"
     PlanItemType.PARENTAL_ACTIVITY -> "For Us"
 }
 
 @Composable
+private fun PlanItemType.color(): Color = when (this) {
+    PlanItemType.CHORE -> MaterialTheme.colorScheme.primary
+    PlanItemType.FAMILY_ACTIVITY -> MaterialTheme.colorScheme.secondary
+    PlanItemType.PARENTAL_ACTIVITY -> MaterialTheme.colorScheme.tertiary
+}
+
+/** A thin colored bar is the only type indicator — keeps the card to two lines of text. */
+@Composable
+private fun TypeStripe(type: PlanItemType, modifier: Modifier = Modifier) {
+    Box(modifier = modifier.width(4.dp).fillMaxHeight().background(type.color()))
+}
+
+@Composable
 private fun AvailableTaskCard(task: PlanTask, onClick: () -> Unit) {
-    Card(modifier = Modifier.clickable(onClick = onClick)) {
-        Column(modifier = Modifier.padding(12.dp)) {
-            Text(task.itemType.label(), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
-            Text(task.title, style = MaterialTheme.typography.bodyMedium)
-            Text(task.subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    Card(modifier = Modifier.width(150.dp).clickable(onClick = onClick)) {
+        Row {
+            TypeStripe(task.itemType)
+            Column(modifier = Modifier.padding(8.dp)) {
+                Text(task.title, style = MaterialTheme.typography.bodyMedium, maxLines = 2)
+                Text(task.subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+            }
         }
     }
 }
@@ -129,7 +159,7 @@ private fun ReorderablePlanList(
     var list by remember(items) { mutableStateOf(items) }
     var draggingIndex by remember { mutableStateOf(-1) }
     var dragOffset by remember { mutableStateOf(0f) }
-    val itemHeightPx = with(LocalDensity.current) { 76.dp.toPx() }
+    val itemHeightPx = with(LocalDensity.current) { 60.dp.toPx() }
 
     Column(verticalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.padding(top = 8.dp)) {
         list.forEach { task ->
@@ -141,25 +171,30 @@ private fun ReorderablePlanList(
                     .graphicsLayer { translationY = if (isDragging) dragOffset else 0f }
                     .zIndex(if (isDragging) 1f else 0f),
             ) {
-                Box {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    TypeStripe(task.itemType)
                     Row(
-                        modifier = Modifier.padding(12.dp).fillMaxWidth(),
+                        modifier = Modifier.padding(8.dp).fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Text("${index + 1}.", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(end = 8.dp))
+                        Text(
+                            "${index + 1}",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(end = 8.dp),
+                        )
                         Column(modifier = Modifier.weight(1f)) {
-                            Text(task.itemType.label(), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
-                            Text(task.title, style = MaterialTheme.typography.bodyLarge)
-                            Text(task.subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(task.title, style = MaterialTheme.typography.bodyMedium, maxLines = 1)
+                            Text(task.subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
                         }
-                        IconButton(onClick = { onRemove(task) }) {
+                        IconButton(onClick = { onRemove(task) }, modifier = Modifier.size(32.dp)) {
                             Icon(Icons.Filled.Close, contentDescription = "Remove from roadmap")
                         }
                         Icon(
                             Icons.Filled.DragHandle,
                             contentDescription = "Drag to reorder",
                             modifier = Modifier
-                                .size(28.dp)
+                                .size(24.dp)
                                 .pointerInput(task.itemType, task.itemId) {
                                     detectDragGesturesAfterLongPress(
                                         onDragStart = {

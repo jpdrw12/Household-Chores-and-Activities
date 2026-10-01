@@ -103,6 +103,7 @@ fun FamilyActivitiesScreen(repository: Repository) {
                             onToggle = { checked -> scope.launch { repository.setFamilyActivityDone(activity.id, today, checked) } },
                             onEdit = { editingActivity = activity },
                             onDelete = { deletingActivity = activity },
+                            onSaveNotes = { notes -> scope.launch { repository.updateFamilyActivityNotes(activity, notes) } },
                         )
                     }
                 }
@@ -167,29 +168,36 @@ private fun ActivitySlot.label(): String = when (this) {
 }
 
 @Composable
-private fun ActivityRow(activity: FamilyActivity, done: Boolean, onToggle: (Boolean) -> Unit, onEdit: () -> Unit, onDelete: () -> Unit) {
+private fun ActivityRow(
+    activity: FamilyActivity,
+    done: Boolean,
+    onToggle: (Boolean) -> Unit,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit,
+    onSaveNotes: (String?) -> Unit,
+) {
     Card(modifier = Modifier.fillMaxWidth()) {
-        Row(modifier = Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Checkbox(checked = done, onCheckedChange = onToggle)
-            Column(modifier = Modifier.weight(1f)) {
-                Text(activity.title)
-                Text(
-                    buildString {
-                        append(if (activity.category == ActivityCategory.INDOOR) "Indoor" else "Outdoor")
-                        if (activity.quickOption) append(" · Quick")
-                    },
-                    style = MaterialTheme.typography.bodySmall,
-                )
-                if (!activity.notes.isNullOrBlank()) {
+        Column {
+            Row(modifier = Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Checkbox(checked = done, onCheckedChange = onToggle)
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(activity.title)
                     Text(
-                        activity.notes,
+                        buildString {
+                            append(if (activity.category == ActivityCategory.INDOOR) "Indoor" else "Outdoor")
+                            if (activity.quickOption) append(" · Quick")
+                        },
                         style = MaterialTheme.typography.bodySmall,
-                        fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
                     )
                 }
+                IconButton(onClick = onEdit) { Icon(Icons.Filled.Edit, contentDescription = "Edit activity") }
+                IconButton(onClick = onDelete) { Icon(Icons.Filled.Delete, contentDescription = "Delete activity") }
             }
-            IconButton(onClick = onEdit) { Icon(Icons.Filled.Edit, contentDescription = "Edit activity") }
-            IconButton(onClick = onDelete) { Icon(Icons.Filled.Delete, contentDescription = "Delete activity") }
+            com.jpdrw.household.ui.common.NotesField(
+                notes = activity.notes,
+                onSave = onSaveNotes,
+                modifier = Modifier.padding(start = 40.dp, end = 8.dp, bottom = 8.dp),
+            )
         }
     }
 }
@@ -206,7 +214,6 @@ private fun FamilyActivityDialog(
     var category by remember { mutableStateOf(initial?.category ?: ActivityCategory.INDOOR) }
     var slot by remember { mutableStateOf(initial?.slot ?: ActivitySlot.MID_PLAY) }
     var quickOption by remember { mutableStateOf(initial?.quickOption ?: false) }
-    var notes by remember { mutableStateOf(initial?.notes ?: "") }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -232,17 +239,10 @@ private fun FamilyActivityDialog(
                         Text("Quick (fits a tight pre-school window)")
                     }
                 }
-                androidx.compose.material3.OutlinedTextField(
-                    value = notes,
-                    onValueChange = { notes = it },
-                    label = { Text("Notes (optional)") },
-                    minLines = 2,
-                    modifier = Modifier.fillMaxWidth(),
-                )
             }
         },
         confirmButton = {
-            Button(enabled = actTitle.isNotBlank(), onClick = { onConfirm(actTitle.trim(), category, slot, quickOption, notes.trim().ifBlank { null }) }) {
+            Button(enabled = actTitle.isNotBlank(), onClick = { onConfirm(actTitle.trim(), category, slot, quickOption, initial?.notes) }) {
                 Text(if (initial == null) "Add" else "Save")
             }
         },

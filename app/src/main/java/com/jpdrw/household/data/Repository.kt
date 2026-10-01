@@ -359,11 +359,32 @@ class Repository(private val db: AppDatabase) {
         )
     }
 
-    suspend fun addParentalActivity(title: String, audience: ParentalAudience, budget: BudgetTier, isSpicy: Boolean = false, notes: String? = null) =
-        db.parentalActivityDao().insert(ParentalActivity(title = title, audience = audience, budget = budget, isSpicy = isSpicy, notes = notes))
+    suspend fun addParentalActivity(
+        title: String,
+        audience: ParentalAudience,
+        budget: BudgetTier,
+        isSpicy: Boolean = false,
+        notes: String? = null,
+        scheduledDate: String? = null,
+    ) = db.parentalActivityDao().insert(
+        ParentalActivity(title = title, audience = audience, budget = budget, isSpicy = isSpicy, notes = notes, scheduledDate = scheduledDate),
+    )
 
-    suspend fun updateParentalActivity(id: Long, title: String, audience: ParentalAudience, budget: BudgetTier, isSpicy: Boolean = false, notes: String? = null) =
-        db.parentalActivityDao().update(ParentalActivity(id = id, title = title, audience = audience, budget = budget, isSpicy = isSpicy, notes = notes))
+    suspend fun updateParentalActivity(
+        id: Long,
+        title: String,
+        audience: ParentalAudience,
+        budget: BudgetTier,
+        isSpicy: Boolean = false,
+        notes: String? = null,
+        scheduledDate: String? = null,
+    ) = db.parentalActivityDao().update(
+        ParentalActivity(id = id, title = title, audience = audience, budget = budget, isSpicy = isSpicy, notes = notes, scheduledDate = scheduledDate),
+    )
+
+    suspend fun updateChoreNotes(chore: Chore, notes: String?) = db.choreDao().update(chore.copy(notes = notes))
+    suspend fun updateFamilyActivityNotes(activity: FamilyActivity, notes: String?) = db.familyActivityDao().update(activity.copy(notes = notes))
+    suspend fun updateParentalActivityNotes(activity: ParentalActivity, notes: String?) = db.parentalActivityDao().update(activity.copy(notes = notes))
 
     suspend fun deleteParentalActivity(id: Long) = db.parentalActivityDao().delete(id)
 

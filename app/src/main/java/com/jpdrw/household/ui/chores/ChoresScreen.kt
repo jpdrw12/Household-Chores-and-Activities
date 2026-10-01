@@ -309,14 +309,11 @@ private fun ChoreCard(
                 IconButton(onClick = onEdit) { Icon(Icons.Filled.Edit, contentDescription = "Edit chore") }
                 IconButton(onClick = onDelete) { Icon(Icons.Filled.Delete, contentDescription = "Delete chore") }
             }
-            if (!item.chore.notes.isNullOrBlank()) {
-                Text(
-                    item.chore.notes,
-                    style = MaterialTheme.typography.bodySmall,
-                    fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
-                    modifier = Modifier.padding(start = 40.dp, bottom = 4.dp),
-                )
-            }
+            com.jpdrw.household.ui.common.NotesField(
+                notes = item.chore.notes,
+                onSave = { newNotes -> scope.launch { repository.updateChoreNotes(item.chore, newNotes) } },
+                modifier = Modifier.padding(start = 40.dp, bottom = 4.dp),
+            )
             TextButton(onClick = { photoExpanded = !photoExpanded }) {
                 Icon(Icons.Filled.Photo, contentDescription = null, modifier = Modifier.size(18.dp))
                 Text(" Reference photos (${photos.size})")
@@ -477,7 +474,6 @@ private fun ChoreDialog(
     var priority by remember { mutableStateOf(initial?.priority ?: Priority.NORMAL) }
     var startTime by remember { mutableStateOf(initial?.startTime) }
     var estimatedEndTime by remember { mutableStateOf(initial?.estimatedEndTime) }
-    var notes by remember { mutableStateOf(initial?.notes ?: "") }
     var assigneeId by remember {
         mutableStateOf(initial?.assigneeId ?: assignees.firstOrNull { it.isDefault }?.id ?: assignees.firstOrNull()?.id ?: 0L)
     }
@@ -553,14 +549,6 @@ private fun ChoreDialog(
                     TimeField(label = "Start", time = startTime, onTimeChange = { startTime = it }, modifier = Modifier.weight(1f))
                     TimeField(label = "Est. end", time = estimatedEndTime, onTimeChange = { estimatedEndTime = it }, modifier = Modifier.weight(1f))
                 }
-
-                OutlinedTextField(
-                    value = notes,
-                    onValueChange = { notes = it },
-                    label = { Text("Notes (optional)") },
-                    minLines = 2,
-                    modifier = Modifier.fillMaxWidth(),
-                )
             }
         },
         confirmButton = {
@@ -577,7 +565,7 @@ private fun ChoreDialog(
                         priority,
                         startTime,
                         estimatedEndTime,
-                        notes.trim().ifBlank { null },
+                        initial?.notes,
                     )
                 },
             ) { Text(if (initial == null) "Add" else "Save") }
