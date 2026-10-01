@@ -10,6 +10,7 @@ import com.jpdrw.household.data.entity.Assignee
 import com.jpdrw.household.data.entity.Chore
 import com.jpdrw.household.data.entity.ChoreOccurrence
 import com.jpdrw.household.data.entity.ChorePhoto
+import com.jpdrw.household.data.entity.ChorePlanEntry
 import com.jpdrw.household.data.entity.ChoreSubtask
 import com.jpdrw.household.data.entity.ChoreSubtaskCheck
 import com.jpdrw.household.data.entity.FamilyActivity
@@ -28,8 +29,32 @@ interface AssigneeDao {
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insert(assignee: Assignee): Long
 
+    @Update
+    suspend fun update(assignee: Assignee)
+
     @Delete
     suspend fun delete(assignee: Assignee)
+
+    @Query("DELETE FROM assignees WHERE id = :id")
+    suspend fun deleteById(id: Long)
+}
+
+@Dao
+interface ChorePlanDao {
+    @Query("SELECT * FROM chore_plan_entries WHERE date = :date ORDER BY sortOrder ASC")
+    fun observeForDate(date: String): Flow<List<ChorePlanEntry>>
+
+    @Insert
+    suspend fun insert(entry: ChorePlanEntry): Long
+
+    @Query("DELETE FROM chore_plan_entries WHERE date = :date AND choreId = :choreId")
+    suspend fun deleteEntry(date: String, choreId: Long)
+
+    @Query("DELETE FROM chore_plan_entries WHERE date = :date")
+    suspend fun deleteAllForDate(date: String)
+
+    @Query("SELECT MAX(sortOrder) FROM chore_plan_entries WHERE date = :date")
+    suspend fun maxSortOrder(date: String): Int?
 }
 
 @Dao

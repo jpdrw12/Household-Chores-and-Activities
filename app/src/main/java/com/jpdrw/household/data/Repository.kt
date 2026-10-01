@@ -7,6 +7,7 @@ import com.jpdrw.household.data.entity.BudgetTier
 import com.jpdrw.household.data.entity.Chore
 import com.jpdrw.household.data.entity.ChoreOccurrence
 import com.jpdrw.household.data.entity.ChorePhoto
+import com.jpdrw.household.data.entity.ChorePlanEntry
 import com.jpdrw.household.data.entity.ChoreSubtask
 import com.jpdrw.household.data.entity.ChoreSubtaskCheck
 import com.jpdrw.household.data.entity.FamilyActivity
@@ -55,6 +56,8 @@ class Repository(private val db: AppDatabase) {
     // --- Assignees ---
     fun observeAssignees(): Flow<List<Assignee>> = db.assigneeDao().observeAll()
     suspend fun addAssignee(name: String) = db.assigneeDao().insert(Assignee(name = name))
+    suspend fun renameAssignee(assignee: Assignee, newName: String) = db.assigneeDao().update(assignee.copy(name = newName))
+    suspend fun deleteAssignee(id: Long) = db.assigneeDao().deleteById(id)
 
     // --- Chores ---
 
@@ -113,6 +116,54 @@ class Repository(private val db: AppDatabase) {
                 }
                 .sortedBy { it.chore.title }
         }
+
+    // --- Day roadmap (Mapper tab) ---
+
+    /** Chores placed into [date]'s roadmap, in order, regardless of completion state. */
+    fun observeDayPlan(date: String): Flow<List<ChoreWithOccurrence>> =
+        combine(
+            db.chorePlanDao().observeForDate(date),
+            db.choreDao().observeActive(),
+            db.assigneeDao().observeAll(),
+            db.choreDao().observeOccurrencesForDate(date),
+        ) { entries, chores, assignees, occurrences ->
+            val choresById = chores.associateBy { it.id }
+            val assigneeNames = assignees.associateBy { it.id }
+            val occByChore = occurrences.associateBy { it.choreId }
+            entries.sortedBy { it.sortOrder }.mapNotNull { entry ->
+                val chore = choresById[entry.choreId] ?: return@mapNotNull null
+                ChoreWithOccurrence(
+                    chore = chore,
+                    occurrence = occByChore[chore.id],
+                    assigneeName = assigneeNames[chore.assigneeId]?.name ?: "Family",
+                    effectiveDueDate = date,
+                    isOverdue = false,
+                )
+            }
+        }
+
+    /** Chores due on [date] that haven't been placed into the roadmap yet. */
+    fun observeAvailableForPlan(date: String): Flow<List<ChoreWithOccurrence>> =
+        combine(observeChoresForDate(date), db.chorePlanDao().observeForDate(date)) { due, planned ->
+            val plannedChoreIds = planned.map { it.choreId }.toSet()
+            due.filter { it.chore.id !in plannedChoreIds }
+        }
+
+    suspend fun addToPlan(date: String, choreId: Long) {
+        val dao = db.chorePlanDao()
+        val nextOrder = (dao.maxSortOrder(date) ?: -1) + 1
+        dao.insert(ChorePlanEntry(date = date, choreId = choreId, sortOrder = nextOrder))
+    }
+
+    suspend fun removeFromPlan(date: String, choreId: Long) = db.chorePlanDao().deleteEntry(date, choreId)
+
+    suspend fun reorderPlan(date: String, orderedChoreIds: List<Long>) {
+        val dao = db.chorePlanDao()
+        dao.deleteAllForDate(date)
+        orderedChoreIds.forEachIndexed { index, choreId ->
+            dao.insert(ChorePlanEntry(date = date, choreId = choreId, sortOrder = index))
+        }
+    }
 
     /**
      * True once [chore]'s estimatedEndTime has passed on [dueDate], if it's due today and has a

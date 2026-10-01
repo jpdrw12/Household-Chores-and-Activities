@@ -94,6 +94,21 @@ data class ChoreOccurrence(
     val completedPhotoUri: String? = null,
 )
 
+/** One chore placed into a given day's roadmap, in order. Lets a day's available tasks be
+ *  strung together into a sequence on the Mapper tab, independent of completion state. */
+@Entity(
+    tableName = "chore_plan_entries",
+    foreignKeys = [
+        ForeignKey(entity = Chore::class, parentColumns = ["id"], childColumns = ["choreId"], onDelete = ForeignKey.CASCADE),
+    ],
+)
+data class ChorePlanEntry(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val date: String, // ISO yyyy-MM-dd
+    val choreId: Long,
+    val sortOrder: Int,
+)
+
 enum class ActivityCategory { INDOOR, OUTDOOR }
 enum class ActivitySlot { START_UP, MID_PLAY, WIND_DOWN, BEDTIME }
 

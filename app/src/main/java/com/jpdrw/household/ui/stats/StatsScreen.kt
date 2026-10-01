@@ -8,13 +8,23 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -24,12 +34,14 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.jpdrw.household.data.AppPrefs
 import com.jpdrw.household.data.MonthlyStats
 import com.jpdrw.household.data.Repository
 import com.jpdrw.household.data.ThemeMode
+import com.jpdrw.household.data.entity.Assignee
 import kotlinx.coroutines.launch
 
 /** Admin-only view of tracked data and app settings. Reached via the bottom nav's "Admin" tab, out of the way of daily use. */
@@ -39,6 +51,10 @@ fun StatsScreen(repository: Repository, appPrefs: AppPrefs) {
     var stats by remember { mutableStateOf<MonthlyStats?>(null) }
     val themeMode by appPrefs.themeMode.collectAsState(initial = ThemeMode.SYSTEM)
     val spicyEnabled by appPrefs.spicyContentEnabled.collectAsState(initial = false)
+    val assignees by repository.observeAssignees().collectAsState(initial = emptyList())
+    var renamingAssignee by remember { mutableStateOf<Assignee?>(null) }
+    var deletingAssignee by remember { mutableStateOf<Assignee?>(null) }
+    var newAssigneeName by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(Unit) {
@@ -82,6 +98,45 @@ fun StatsScreen(repository: Repository, appPrefs: AppPrefs) {
                 }
             }
 
+            Text("Assignees", style = androidx.compose.material3.MaterialTheme.typography.titleMedium)
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(8.dp)) {
+                    assignees.forEach { assignee ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(assignee.name, modifier = Modifier.weight(1f))
+                            IconButton(onClick = { renamingAssignee = assignee }) {
+                                Icon(Icons.Filled.Edit, contentDescription = "Rename ${assignee.name}")
+                            }
+                            if (!assignee.isDefault) {
+                                IconButton(onClick = { deletingAssignee = assignee }) {
+                                    Icon(Icons.Filled.Delete, contentDescription = "Delete ${assignee.name}")
+                                }
+                            }
+                        }
+                    }
+                    Row(modifier = Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        OutlinedTextField(
+                            value = newAssigneeName,
+                            onValueChange = { newAssigneeName = it },
+                            label = { Text("New assignee") },
+                            singleLine = true,
+                            modifier = Modifier.weight(1f),
+                        )
+                        IconButton(
+                            onClick = {
+                                if (newAssigneeName.isNotBlank()) {
+                                    scope.launch { repository.addAssignee(newAssigneeName.trim()) }
+                                    newAssigneeName = ""
+                                }
+                            },
+                        ) { Icon(Icons.Filled.Add, contentDescription = "Add assignee") }
+                    }
+                }
+            }
+
             Text("Content", style = androidx.compose.material3.MaterialTheme.typography.titleMedium)
             Card(modifier = Modifier.fillMaxWidth()) {
                 Row(
@@ -105,6 +160,40 @@ fun StatsScreen(repository: Repository, appPrefs: AppPrefs) {
                 style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
             )
         }
+    }
+
+    renamingAssignee?.let { assignee ->
+        var text by remember(assignee.id) { mutableStateOf(assignee.name) }
+        AlertDialog(
+            onDismissRequest = { renamingAssignee = null },
+            title = { Text("Rename assignee") },
+            text = { OutlinedTextField(value = text, onValueChange = { text = it }, singleLine = true) },
+            confirmButton = {
+                Button(
+                    enabled = text.isNotBlank(),
+                    onClick = {
+                        scope.launch { repository.renameAssignee(assignee, text.trim()) }
+                        renamingAssignee = null
+                    },
+                ) { Text("Save") }
+            },
+            dismissButton = { TextButton(onClick = { renamingAssignee = null }) { Text("Cancel") } },
+        )
+    }
+
+    deletingAssignee?.let { assignee ->
+        AlertDialog(
+            onDismissRequest = { deletingAssignee = null },
+            title = { Text("Delete \"${assignee.name}\"?") },
+            text = { Text("Chores assigned to them will show as \"Family\" instead.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    scope.launch { repository.deleteAssignee(assignee.id) }
+                    deletingAssignee = null
+                }) { Text("Delete") }
+            },
+            dismissButton = { TextButton(onClick = { deletingAssignee = null }) { Text("Cancel") } },
+        )
     }
 }
 
