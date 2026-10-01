@@ -31,6 +31,8 @@ data class ChoreWithOccurrence(
     /** The due date this occurrence actually belongs to — may be earlier than the viewed date if overdue. */
     val effectiveDueDate: String,
     val isOverdue: Boolean,
+    /** Who actually checked it off, if completed and recorded — may differ from [assigneeName]. */
+    val completedByName: String? = null,
 )
 
 data class AssigneeStat(val assigneeName: String, val completed: Int)
@@ -127,6 +129,7 @@ class Repository(private val db: AppDatabase) {
                         assigneeName = assigneeNames[chore.assigneeId]?.name ?: "Family",
                         effectiveDueDate = date,
                         isOverdue = false,
+                        completedByName = assigneeNames[occurrence.completedByAssigneeId]?.name,
                     )
                 }
                 .sortedBy { it.chore.title }
@@ -290,13 +293,35 @@ class Repository(private val db: AppDatabase) {
         )
     }
 
-    suspend fun setChoreCompleted(choreId: Long, date: String, completed: Boolean, photoUri: String?) {
+    suspend fun setChoreCompleted(
+        choreId: Long,
+        date: String,
+        completed: Boolean,
+        photoUri: String?,
+        completedByAssigneeId: Long? = null,
+    ) {
         val dao = db.choreDao()
         val existing = dao.findOccurrence(choreId, date)
         if (existing != null) {
-            dao.updateOccurrence(existing.copy(completed = completed, completedAt = if (completed) System.currentTimeMillis() else null, completedPhotoUri = photoUri ?: existing.completedPhotoUri))
+            dao.updateOccurrence(
+                existing.copy(
+                    completed = completed,
+                    completedAt = if (completed) System.currentTimeMillis() else null,
+                    completedPhotoUri = photoUri ?: existing.completedPhotoUri,
+                    completedByAssigneeId = if (completed) completedByAssigneeId else null,
+                ),
+            )
         } else {
-            dao.insertOccurrence(ChoreOccurrence(choreId = choreId, dueDate = date, completed = completed, completedAt = if (completed) System.currentTimeMillis() else null, completedPhotoUri = photoUri))
+            dao.insertOccurrence(
+                ChoreOccurrence(
+                    choreId = choreId,
+                    dueDate = date,
+                    completed = completed,
+                    completedAt = if (completed) System.currentTimeMillis() else null,
+                    completedPhotoUri = photoUri,
+                    completedByAssigneeId = if (completed) completedByAssigneeId else null,
+                ),
+            )
         }
     }
 

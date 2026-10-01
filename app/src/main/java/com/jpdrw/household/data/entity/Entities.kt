@@ -93,6 +93,10 @@ data class ChoreOccurrence(
     val completed: Boolean = false,
     val completedAt: Long? = null,
     val completedPhotoUri: String? = null,
+    /** Who actually checked this off — asked at check time since a chore assigned to "Family"
+     *  could be done by anyone. Falls back to the chore's own assigneeId when null (e.g. rows
+     *  completed before this field existed). */
+    val completedByAssigneeId: Long? = null,
 )
 
 enum class PlanItemType { CHORE, FAMILY_ACTIVITY, PARENTAL_ACTIVITY }

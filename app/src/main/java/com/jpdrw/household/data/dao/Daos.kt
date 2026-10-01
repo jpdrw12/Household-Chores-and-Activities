@@ -104,11 +104,11 @@ interface ChoreDao {
 
     @Query(
         """
-        SELECT c.assigneeId AS assigneeId, COUNT(*) AS completed
+        SELECT COALESCE(o.completedByAssigneeId, c.assigneeId) AS assigneeId, COUNT(*) AS completed
         FROM chore_occurrences o
         JOIN chores c ON c.id = o.choreId
         WHERE o.dueDate BETWEEN :start AND :end AND o.completed = 1
-        GROUP BY c.assigneeId
+        GROUP BY COALESCE(o.completedByAssigneeId, c.assigneeId)
         """,
     )
     suspend fun completedCountByAssignee(start: String, end: String): List<AssigneeCompletionCount>

@@ -116,8 +116,8 @@ fun ChoresScreen(repository: Repository) {
                             item = item,
                             repository = repository,
                             assignees = assignees,
-                            onToggle = { checked ->
-                                scope.launch { repository.setChoreCompleted(item.chore.id, item.effectiveDueDate, checked, null) }
+                            onToggle = { checked, completedBy ->
+                                scope.launch { repository.setChoreCompleted(item.chore.id, item.effectiveDueDate, checked, null, completedBy) }
                             },
                             onEdit = { editingChore = item.chore },
                             onDelete = { deletingChore = item.chore },
@@ -137,8 +137,8 @@ fun ChoresScreen(repository: Repository) {
                                     item = item,
                                     repository = repository,
                                     assignees = assignees,
-                                    onToggle = { checked ->
-                                        scope.launch { repository.setChoreCompleted(item.chore.id, item.effectiveDueDate, checked, null) }
+                                    onToggle = { checked, completedBy ->
+                                        scope.launch { repository.setChoreCompleted(item.chore.id, item.effectiveDueDate, checked, null, completedBy) }
                                     },
                                     onEdit = { editingChore = item.chore },
                                     onDelete = { deletingChore = item.chore },
@@ -208,17 +208,19 @@ private fun DateSelector(selectedDate: LocalDate, onDateChange: (LocalDate) -> U
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun ChoreCard(
     item: ChoreWithOccurrence,
     repository: Repository,
     assignees: List<Assignee>,
-    onToggle: (Boolean) -> Unit,
+    onToggle: (Boolean, Long?) -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
 ) {
     var photoExpanded by remember { mutableStateOf(false) }
     var subtasksExpanded by remember { mutableStateOf(false) }
+    var showWhoDialog by remember { mutableStateOf(false) }
     val completed = item.occurrence?.completed == true
     val photos by repository.observeChorePhotos(item.chore.id).collectAsState(initial = emptyList())
     val subtasks by repository.observeSubtasks(item.chore.id, item.effectiveDueDate).collectAsState(initial = emptyList())
@@ -272,7 +274,12 @@ private fun ChoreCard(
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Checkbox(checked = completed, onCheckedChange = onToggle)
+                Checkbox(
+                    checked = completed,
+                    onCheckedChange = { checked ->
+                        if (checked) showWhoDialog = true else onToggle(false, null)
+                    },
+                )
                 Column(modifier = Modifier.padding(start = 4.dp).weight(1f)) {
                     Text(
                         item.chore.title,
@@ -290,6 +297,10 @@ private fun ChoreCard(
                                     append(item.chore.startTime ?: "?")
                                     append("–")
                                     append(item.chore.estimatedEndTime ?: "?")
+                                }
+                                if (completed && item.completedByName != null) {
+                                    append(" · Done by ")
+                                    append(item.completedByName)
                                 }
                             },
                             style = MaterialTheme.typography.bodySmall,
@@ -368,6 +379,28 @@ private fun ChoreCard(
                 }
             }
         }
+    }
+
+    if (showWhoDialog) {
+        AlertDialog(
+            onDismissRequest = { showWhoDialog = false },
+            title = { Text("Who did this?") },
+            text = {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    assignees.forEach { assignee ->
+                        AssistChip(
+                            onClick = {
+                                onToggle(true, assignee.id)
+                                showWhoDialog = false
+                            },
+                            label = { Text(assignee.name) },
+                        )
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = { TextButton(onClick = { showWhoDialog = false }) { Text("Cancel") } },
+        )
     }
 }
 
