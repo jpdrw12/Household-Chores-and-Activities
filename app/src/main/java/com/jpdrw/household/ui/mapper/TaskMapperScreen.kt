@@ -46,11 +46,13 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import com.jpdrw.household.data.AppPrefs
-import com.jpdrw.household.data.DateUtils
 import com.jpdrw.household.data.PlanTask
 import com.jpdrw.household.data.Repository
 import com.jpdrw.household.data.entity.PlanItemType
 import kotlinx.coroutines.launch
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
+import androidx.compose.material3.TextButton
 
 /**
  * Lets the day's available chores, family activities, and "For Us" activities be tapped into a
@@ -61,7 +63,8 @@ import kotlinx.coroutines.launch
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TaskMapperScreen(repository: Repository, appPrefs: AppPrefs) {
-    val today = DateUtils.today()
+    var selectedDate by remember { mutableStateOf(LocalDate.now()) }
+    val today = selectedDate.format(DateTimeFormatter.ISO_LOCAL_DATE)
     val availableRaw by repository.observeAvailableForPlan(today).collectAsState(initial = emptyList())
     val plannedRaw by repository.observeDayPlan(today).collectAsState(initial = emptyList())
     val planned = plannedRaw
@@ -72,7 +75,9 @@ fun TaskMapperScreen(repository: Repository, appPrefs: AppPrefs) {
 
     Scaffold(topBar = { TopAppBar(title = { Text("Day Roadmap") }) }) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp).verticalScroll(rememberScrollState())) {
-            Text("Available tasks", style = MaterialTheme.typography.titleMedium)
+            MapperDateSelector(selectedDate = selectedDate, onDateChange = { selectedDate = it })
+
+            Text("Available tasks", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 8.dp))
 
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 8.dp)) {
                 FilterChip(selected = typeFilter == null, onClick = { typeFilter = null }, label = { Text("All") })
@@ -97,7 +102,10 @@ fun TaskMapperScreen(repository: Repository, appPrefs: AppPrefs) {
             }
 
             Spacer(modifier = Modifier.padding(top = 24.dp))
-            Text("Today's roadmap", style = MaterialTheme.typography.titleMedium)
+            Text(
+                if (selectedDate == LocalDate.now()) "Today's roadmap" else "Roadmap for $today",
+                style = MaterialTheme.typography.titleMedium,
+            )
             if (planned.isEmpty()) {
                 Text(
                     "Tap a task above, then long-press the ≡ handle to drag it into order.",
@@ -113,6 +121,21 @@ fun TaskMapperScreen(repository: Repository, appPrefs: AppPrefs) {
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun MapperDateSelector(selectedDate: LocalDate, onDateChange: (LocalDate) -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        TextButton(onClick = { onDateChange(selectedDate.minusDays(1)) }) { Text("< Prev") }
+        Text(
+            if (selectedDate == LocalDate.now()) "Today · $selectedDate" else selectedDate.toString(),
+            style = MaterialTheme.typography.titleMedium,
+        )
+        TextButton(onClick = { onDateChange(selectedDate.plusDays(1)) }) { Text("Next >") }
     }
 }
 
@@ -149,7 +172,7 @@ private fun AvailableTaskCard(task: PlanTask, onClick: () -> Unit) {
                 Text(task.title, style = MaterialTheme.typography.bodyMedium, maxLines = 2)
                 Text(task.subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
                 if (task.isScheduledToday) {
-                    Text("SCHEDULED TODAY", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.tertiary)
+                    Text("SCHEDULED", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.tertiary)
                 }
             }
         }

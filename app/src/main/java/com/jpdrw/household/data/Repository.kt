@@ -50,7 +50,7 @@ data class PlanTask(
     val title: String,
     val subtitle: String,
     val isSpicy: Boolean = false,
-    /** True for a PARENTAL_ACTIVITY whose scheduledDate is today — highlighted in the Mapper roadmap. */
+    /** True for a PARENTAL_ACTIVITY whose scheduledDate matches the Mapper's selected date — highlighted in the roadmap. */
     val isScheduledToday: Boolean = false,
 )
 
@@ -155,8 +155,8 @@ class Repository(private val db: AppDatabase) {
             activities.filter { it.id !in doneIds }
         }
 
-    private fun availableParentalActivities(): Flow<List<ParentalActivity>> =
-        combine(db.parentalActivityDao().observeActive(), db.parentalActivityDao().observeLogsForWeek(DateUtils.isoWeek())) { activities, logs ->
+    private fun availableParentalActivities(week: String): Flow<List<ParentalActivity>> =
+        combine(db.parentalActivityDao().observeActive(), db.parentalActivityDao().observeLogsForWeek(week)) { activities, logs ->
             val doneIds = logs.filter { it.done }.map { it.activityId }.toSet()
             activities.filter { it.id !in doneIds }
         }
@@ -166,7 +166,7 @@ class Repository(private val db: AppDatabase) {
         combine(
             observeChoresForDate(date),
             availableFamilyActivities(date),
-            availableParentalActivities(),
+            availableParentalActivities(DateUtils.isoWeek(LocalDate.parse(date))),
             db.planDao().observeForDate(date),
         ) { chores, familyActs, parentalActs, planned ->
             val plannedKeys = planned.map { it.itemType to it.itemId }.toSet()
