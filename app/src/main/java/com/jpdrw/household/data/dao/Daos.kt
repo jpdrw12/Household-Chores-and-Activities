@@ -210,6 +210,9 @@ interface ParentalActivityDao {
     @Query("SELECT * FROM parental_activity_logs WHERE isoWeek = :isoWeek")
     fun observeLogsForWeek(isoWeek: String): Flow<List<ParentalActivityLog>>
 
+    @Query("SELECT * FROM parental_activity_logs")
+    fun observeAllLogs(): Flow<List<ParentalActivityLog>>
+
     @Query("SELECT * FROM parental_activity_logs WHERE activityId = :activityId AND isoWeek = :isoWeek LIMIT 1")
     suspend fun findLog(activityId: Long, isoWeek: String): ParentalActivityLog?
 

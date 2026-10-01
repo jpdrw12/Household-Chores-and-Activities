@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Checklist
+import androidx.compose.material.icons.filled.Event
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.Settings
@@ -27,6 +28,7 @@ import com.jpdrw.household.ui.activities.FamilyActivitiesScreen
 import com.jpdrw.household.ui.chores.ChoresScreen
 import com.jpdrw.household.ui.mapper.TaskMapperScreen
 import com.jpdrw.household.ui.parental.ParentalActivitiesScreen
+import com.jpdrw.household.ui.scheduled.ScheduledActivitiesScreen
 import com.jpdrw.household.ui.stats.StatsScreen
 
 private sealed class Destination(val route: String, val label: String) {
@@ -34,10 +36,18 @@ private sealed class Destination(val route: String, val label: String) {
     data object Mapper : Destination("mapper", "Mapper")
     data object Activities : Destination("activities", "Activities")
     data object Parental : Destination("parental", "For Us")
+    data object Scheduled : Destination("scheduled", "Scheduled")
     data object Stats : Destination("stats", "Admin")
 }
 
-private val destinations = listOf(Destination.Chores, Destination.Mapper, Destination.Activities, Destination.Parental, Destination.Stats)
+private val destinations = listOf(
+    Destination.Chores,
+    Destination.Mapper,
+    Destination.Activities,
+    Destination.Parental,
+    Destination.Scheduled,
+    Destination.Stats,
+)
 
 @Composable
 fun HouseholdNavHost(repository: Repository, appPrefs: AppPrefs) {
@@ -65,6 +75,7 @@ fun HouseholdNavHost(repository: Repository, appPrefs: AppPrefs) {
                                 Destination.Mapper -> Icons.Filled.Map
                                 Destination.Activities -> Icons.Filled.CheckCircle
                                 Destination.Parental -> Icons.Filled.Favorite
+                                Destination.Scheduled -> Icons.Filled.Event
                                 Destination.Stats -> Icons.Filled.Settings
                             }
                             Icon(icon, contentDescription = destination.label)
@@ -84,6 +95,7 @@ fun HouseholdNavHost(repository: Repository, appPrefs: AppPrefs) {
             composable(Destination.Mapper.route) { TaskMapperScreen(repository, appPrefs) }
             composable(Destination.Activities.route) { FamilyActivitiesScreen(repository) }
             composable(Destination.Parental.route) { ParentalActivitiesScreen(repository, appPrefs) }
+            composable(Destination.Scheduled.route) { ScheduledActivitiesScreen(repository, appPrefs) }
             composable(Destination.Stats.route) { StatsScreen(repository, appPrefs) }
         }
     }

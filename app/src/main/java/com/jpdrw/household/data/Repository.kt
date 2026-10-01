@@ -56,7 +56,16 @@ private fun audienceLabel(audience: ParentalAudience): String = when (audience) 
     ParentalAudience.PERSONAL -> "Personal"
     ParentalAudience.TOGETHER -> "Together"
     ParentalAudience.ADULT_ONLY -> "Adult only"
+    ParentalAudience.FAMILY -> "Family & Kids"
 }
+
+data class ScheduledActivity(
+    val activity: ParentalActivity,
+    val done: Boolean,
+    /** The ISO week activity.scheduledDate falls in — needed so toggling "done" records against
+     *  the right week regardless of which week it's currently viewed in. */
+    val isoWeek: String,
+)
 
 data class MonthlyStats(
     val choresCompleted: Int,
@@ -419,6 +428,23 @@ class Repository(private val db: AppDatabase) {
         db.parentalActivityDao().update(activity.copy(scheduledDate = scheduledDate))
 
     suspend fun deleteParentalActivity(id: Long) = db.parentalActivityDao().delete(id)
+
+    // --- Scheduled activities (Scheduled tab) ---
+
+    /** Any active parental/family activity with a scheduledDate set, regardless of audience, sorted soonest first. */
+    fun observeScheduledActivities(): Flow<List<ScheduledActivity>> =
+        combine(db.parentalActivityDao().observeActive(), db.parentalActivityDao().observeAllLogs()) { activities, logs ->
+            activities.filter { it.scheduledDate != null }.map { activity ->
+                val week = DateUtils.isoWeek(LocalDate.parse(activity.scheduledDate!!))
+                val done = logs.any { it.activityId == activity.id && it.isoWeek == week && it.done }
+                ScheduledActivity(activity = activity, done = done, isoWeek = week)
+            }.sortedBy { it.activity.scheduledDate }
+        }
+
+    /** Marks a scheduled activity done/undone for the ISO week its own scheduledDate falls in — not
+     *  necessarily the current week, since a past or future scheduled item may be viewed anytime. */
+    suspend fun setScheduledActivityDone(scheduled: ScheduledActivity, done: Boolean) =
+        setParentalActivityDone(scheduled.activity.id, scheduled.isoWeek, done)
 
     // --- Stats (admin) ---
     suspend fun monthlyStats(): MonthlyStats {

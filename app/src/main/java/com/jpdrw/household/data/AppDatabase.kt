@@ -209,6 +209,15 @@ suspend fun AppDatabase.seedIfEmpty() {
         Triple("Game night with friends", ParentalAudience.ADULT_ONLY, BudgetTier.LOW),
         Triple("Night out / concert", ParentalAudience.ADULT_ONLY, BudgetTier.MEDIUM),
         Triple("Weekend getaway", ParentalAudience.ADULT_ONLY, BudgetTier.HIGH),
+        // Bigger planned outings the whole family (including kids) does together.
+        Triple("Family camping trip", ParentalAudience.FAMILY, BudgetTier.MEDIUM),
+        Triple("Family hike", ParentalAudience.FAMILY, BudgetTier.LOW),
+        Triple("Backyard campout", ParentalAudience.FAMILY, BudgetTier.LOW),
+        Triple("Visit the zoo", ParentalAudience.FAMILY, BudgetTier.MEDIUM),
+        Triple("Beach day", ParentalAudience.FAMILY, BudgetTier.LOW),
+        Triple("Road trip", ParentalAudience.FAMILY, BudgetTier.HIGH),
+        Triple("Visit a museum", ParentalAudience.FAMILY, BudgetTier.MEDIUM),
+        Triple("Amusement park", ParentalAudience.FAMILY, BudgetTier.HIGH),
     )
     starterParental.filter { it.first !in existingParentalTitles }.forEach { (title, audience, budget) ->
         parentalDao.insert(ParentalActivity(title = title, audience = audience, budget = budget))

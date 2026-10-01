@@ -159,7 +159,7 @@ data class FamilyActivityLog(
     val done: Boolean = false,
 )
 
-enum class ParentalAudience { PERSONAL, TOGETHER, ADULT_ONLY }
+enum class ParentalAudience { PERSONAL, TOGETHER, ADULT_ONLY, FAMILY }
 enum class BudgetTier { LOW, MEDIUM, HIGH }
 
 /** A weekly parental/couple activity suggestion. */

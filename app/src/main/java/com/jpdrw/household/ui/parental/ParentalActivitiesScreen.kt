@@ -19,8 +19,8 @@ import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
-import androidx.compose.material3.DatePicker
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -31,7 +31,6 @@ import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -48,12 +47,9 @@ import com.jpdrw.household.data.Repository
 import com.jpdrw.household.data.entity.BudgetTier
 import com.jpdrw.household.data.entity.ParentalActivity
 import com.jpdrw.household.data.entity.ParentalAudience
+import com.jpdrw.household.ui.common.DateField
 import com.jpdrw.household.ui.common.NotesField
 import kotlinx.coroutines.launch
-import java.time.Instant
-import java.time.LocalDate
-import java.time.ZoneOffset
-import java.time.format.DateTimeFormatter
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -69,8 +65,15 @@ fun ParentalActivitiesScreen(repository: Repository, appPrefs: AppPrefs) {
     var editingActivity by remember { mutableStateOf<ParentalActivity?>(null) }
     var deletingActivity by remember { mutableStateOf<ParentalActivity?>(null) }
     var budgetFilter by remember { mutableStateOf<BudgetTier?>(null) }
+    var mode by remember { mutableStateOf(AudienceMode.PARENTS) }
 
-    val filtered = activities.filter { (budgetFilter == null || it.budget == budgetFilter) && (spicyEnabled || !it.isSpicy) }
+    val modeAudiences = when (mode) {
+        AudienceMode.PARENTS -> setOf(ParentalAudience.PERSONAL, ParentalAudience.TOGETHER, ParentalAudience.ADULT_ONLY)
+        AudienceMode.FAMILY -> setOf(ParentalAudience.FAMILY)
+    }
+    val filtered = activities.filter {
+        it.audience in modeAudiences && (budgetFilter == null || it.budget == budgetFilter) && (spicyEnabled || !it.isSpicy)
+    }
     val grouped = ParentalAudience.entries.associateWith { audience ->
         filtered.filter { it.audience == audience }.sortedWith(
             compareByDescending<ParentalActivity> { scheduleStatus(it, today, it.id in doneIds) != ScheduleStatus.NONE }
@@ -79,12 +82,16 @@ fun ParentalActivitiesScreen(repository: Repository, appPrefs: AppPrefs) {
     }
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text("For the Parents — this week") }) },
+        topBar = { TopAppBar(title = { Text("For Us — this week") }) },
         floatingActionButton = {
             FloatingActionButton(onClick = { showAddDialog = true }) { Icon(Icons.Filled.Add, contentDescription = "Add activity") }
         },
     ) { padding ->
         Column(modifier = Modifier.padding(padding)) {
+            Row(modifier = Modifier.padding(16.dp, 8.dp, 16.dp, 0.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(selected = mode == AudienceMode.PARENTS, onClick = { mode = AudienceMode.PARENTS }, label = { Text("Parents") })
+                FilterChip(selected = mode == AudienceMode.FAMILY, onClick = { mode = AudienceMode.FAMILY }, label = { Text("Family & Kids") })
+            }
             Row(modifier = Modifier.padding(16.dp, 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 FilterChipRow(selected = budgetFilter, onSelect = { budgetFilter = it })
             }
@@ -115,6 +122,7 @@ fun ParentalActivitiesScreen(repository: Repository, appPrefs: AppPrefs) {
         ParentalActivityDialog(
             title = "New activity",
             initial = null,
+            defaultAudience = if (mode == AudienceMode.FAMILY) ParentalAudience.FAMILY else ParentalAudience.TOGETHER,
             onDismiss = { showAddDialog = false },
             onConfirm = { actTitle, audience, budget, isSpicy ->
                 scope.launch { repository.addParentalActivity(actTitle, audience, budget, isSpicy) }
@@ -152,6 +160,8 @@ fun ParentalActivitiesScreen(repository: Repository, appPrefs: AppPrefs) {
     }
 }
 
+private enum class AudienceMode { PARENTS, FAMILY }
+
 private enum class ScheduleStatus { NONE, TODAY, OVERDUE }
 
 private fun scheduleStatus(activity: ParentalActivity, today: String, done: Boolean): ScheduleStatus {
@@ -182,6 +192,7 @@ private fun ParentalAudience.label(): String = when (this) {
     ParentalAudience.PERSONAL -> "Personal time"
     ParentalAudience.TOGETHER -> "Together"
     ParentalAudience.ADULT_ONLY -> "Adult only"
+    ParentalAudience.FAMILY -> "Family & Kids"
 }
 
 @Composable
@@ -243,11 +254,12 @@ private fun ParentalRow(
 private fun ParentalActivityDialog(
     title: String,
     initial: ParentalActivity?,
+    defaultAudience: ParentalAudience = ParentalAudience.TOGETHER,
     onDismiss: () -> Unit,
     onConfirm: (String, ParentalAudience, BudgetTier, Boolean) -> Unit,
 ) {
     var actTitle by remember { mutableStateOf(initial?.title ?: "") }
-    var audience by remember { mutableStateOf(initial?.audience ?: ParentalAudience.TOGETHER) }
+    var audience by remember { mutableStateOf(initial?.audience ?: defaultAudience) }
     var budget by remember { mutableStateOf(initial?.budget ?: BudgetTier.LOW) }
     var isSpicy by remember { mutableStateOf(initial?.isSpicy ?: false) }
 
@@ -284,49 +296,3 @@ private fun ParentalActivityDialog(
     )
 }
 
-/** Compact, card-friendly date field matching NotesField's pattern: a button when unset, else the
- *  date with a pencil to change it and an X to clear — no full-width text field taking up a row. */
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun DateField(date: String?, onDateChange: (String?) -> Unit, modifier: Modifier = Modifier) {
-    var showPicker by remember { mutableStateOf(false) }
-    val parsed = date?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
-    val pickerState = rememberDatePickerState(
-        initialSelectedDateMillis = (parsed ?: LocalDate.now()).atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli(),
-    )
-
-    if (date != null) {
-        Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text("Scheduled: $date", style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
-            IconButton(onClick = { showPicker = true }, modifier = Modifier.size(28.dp)) {
-                Icon(Icons.Filled.Edit, contentDescription = "Change date", modifier = Modifier.size(16.dp))
-            }
-            IconButton(onClick = { onDateChange(null) }, modifier = Modifier.size(28.dp)) {
-                Icon(Icons.Filled.Close, contentDescription = "Clear date", modifier = Modifier.size(16.dp))
-            }
-        }
-    } else {
-        TextButton(onClick = { showPicker = true }, modifier = modifier) {
-            Icon(Icons.Filled.Edit, contentDescription = null, modifier = Modifier.size(16.dp))
-            Text(" Schedule for a date")
-        }
-    }
-
-    if (showPicker) {
-        AlertDialog(
-            onDismissRequest = { showPicker = false },
-            text = { DatePicker(state = pickerState) },
-            confirmButton = {
-                TextButton(onClick = {
-                    val millis = pickerState.selectedDateMillis
-                    if (millis != null) {
-                        val picked = Instant.ofEpochMilli(millis).atZone(ZoneOffset.UTC).toLocalDate()
-                        onDateChange(picked.format(DateTimeFormatter.ISO_LOCAL_DATE))
-                    }
-                    showPicker = false
-                }) { Text("Set") }
-            },
-            dismissButton = { TextButton(onClick = { showPicker = false }) { Text("Cancel") } },
-        )
-    }
-}
