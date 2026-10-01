@@ -103,12 +103,23 @@ suspend fun AppDatabase.seedIfEmpty() {
         "Do dishes" to Frequency.DAILY,
         "Pack lunch bags" to Frequency.DAILY,
     )
-    val subtaskDao = choreSubtaskDao()
     starterChores.filter { it.first !in existingChoreTitles }.forEach { (title, freq) ->
-        val choreId = choreDao.insert(Chore(title = title, frequency = freq, assigneeId = familyId))
-        if (title == "Put clothes away") {
-            listOf("Shirts", "Pants", "Socks/underwear", "Outerwear").forEachIndexed { index, subtaskTitle ->
-                subtaskDao.insert(ChoreSubtask(choreId = choreId, title = subtaskTitle, sortOrder = index))
+        choreDao.insert(Chore(title = title, frequency = freq, assigneeId = familyId))
+    }
+
+    // "Put clothes away" subtasks are per family member, not per clothing item, so everyone can
+    // check off their own share. Replaces any old item-based subtasks from an earlier seed and
+    // tops up anyone missing — covers both a fresh install and an existing one.
+    val subtaskDao = choreSubtaskDao()
+    val putClothesAwayChore = choreDao.observeActive().first().firstOrNull { it.title == "Put clothes away" }
+    if (putClothesAwayChore != null) {
+        val personNames = listOf("Mom", "Dad", "Ben", "Henry", "Aiden")
+        val existingSubtasks = subtaskDao.observeForChore(putClothesAwayChore.id).first()
+        existingSubtasks.filter { it.title !in personNames }.forEach { subtaskDao.delete(it.id) }
+        val existingSubtaskTitles = existingSubtasks.map { it.title }.toSet()
+        personNames.forEachIndexed { index, name ->
+            if (name !in existingSubtaskTitles) {
+                subtaskDao.insert(ChoreSubtask(choreId = putClothesAwayChore.id, title = name, sortOrder = index))
             }
         }
     }
