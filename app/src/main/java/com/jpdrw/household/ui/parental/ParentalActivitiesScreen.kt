@@ -58,7 +58,6 @@ fun ParentalActivitiesScreen(repository: Repository, appPrefs: AppPrefs) {
     val week = DateUtils.isoWeek()
     val activities by repository.observeParentalActivities().collectAsState(initial = emptyList())
     val logs by repository.observeParentalActivityLogs(week).collectAsState(initial = emptyList())
-    val spicyEnabled by appPrefs.spicyContentEnabled.collectAsState(initial = false)
     val doneIds = logs.filter { it.done }.map { it.activityId }.toSet()
     val scope = rememberCoroutineScope()
     var showAddDialog by remember { mutableStateOf(false) }
@@ -66,13 +65,14 @@ fun ParentalActivitiesScreen(repository: Repository, appPrefs: AppPrefs) {
     var deletingActivity by remember { mutableStateOf<ParentalActivity?>(null) }
     var budgetFilter by remember { mutableStateOf<BudgetTier?>(null) }
     var mode by remember { mutableStateOf(AudienceMode.PARENTS) }
+    var showIntimate by remember { mutableStateOf(false) }
 
     val modeAudiences = when (mode) {
         AudienceMode.PARENTS -> setOf(ParentalAudience.PERSONAL, ParentalAudience.TOGETHER, ParentalAudience.ADULT_ONLY)
         AudienceMode.FAMILY -> setOf(ParentalAudience.FAMILY)
     }
     val filtered = activities.filter {
-        it.audience in modeAudiences && (budgetFilter == null || it.budget == budgetFilter) && (spicyEnabled || !it.isSpicy)
+        it.audience in modeAudiences && (budgetFilter == null || it.budget == budgetFilter) && (showIntimate || !it.isSpicy)
     }
     val grouped = ParentalAudience.entries.associateWith { audience ->
         filtered.filter { it.audience == audience }.sortedWith(
@@ -91,6 +91,7 @@ fun ParentalActivitiesScreen(repository: Repository, appPrefs: AppPrefs) {
             Row(modifier = Modifier.padding(16.dp, 8.dp, 16.dp, 0.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 FilterChip(selected = mode == AudienceMode.PARENTS, onClick = { mode = AudienceMode.PARENTS }, label = { Text("Parents") })
                 FilterChip(selected = mode == AudienceMode.FAMILY, onClick = { mode = AudienceMode.FAMILY }, label = { Text("Family & Kids") })
+                FilterChip(selected = showIntimate, onClick = { showIntimate = !showIntimate }, label = { Text("💞 Intimate") })
             }
             Row(modifier = Modifier.padding(16.dp, 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 FilterChipRow(selected = budgetFilter, onSelect = { budgetFilter = it })
@@ -283,7 +284,7 @@ private fun ParentalActivityDialog(
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Checkbox(checked = isSpicy, onCheckedChange = { isSpicy = it })
-                    Text("💞 Intimate (solo/together, hidden unless admin toggle is on)")
+                    Text("💞 Intimate (hidden unless the Intimate filter is on)")
                 }
             }
         },

@@ -62,13 +62,11 @@ import kotlinx.coroutines.launch
 @Composable
 fun TaskMapperScreen(repository: Repository, appPrefs: AppPrefs) {
     val today = DateUtils.today()
-    val spicyEnabled by appPrefs.spicyContentEnabled.collectAsState(initial = false)
     val availableRaw by repository.observeAvailableForPlan(today).collectAsState(initial = emptyList())
     val plannedRaw by repository.observeDayPlan(today).collectAsState(initial = emptyList())
-    val planned = plannedRaw.filter { spicyEnabled || !it.isSpicy }
+    val planned = plannedRaw
     var typeFilter by remember { mutableStateOf<PlanItemType?>(null) }
     val available = availableRaw
-        .filter { spicyEnabled || !it.isSpicy }
         .filter { typeFilter == null || it.itemType == typeFilter }
     val scope = rememberCoroutineScope()
 

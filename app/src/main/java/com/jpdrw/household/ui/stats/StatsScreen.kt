@@ -22,7 +22,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -50,7 +49,6 @@ import kotlinx.coroutines.launch
 fun StatsScreen(repository: Repository, appPrefs: AppPrefs) {
     var stats by remember { mutableStateOf<MonthlyStats?>(null) }
     val themeMode by appPrefs.themeMode.collectAsState(initial = ThemeMode.SYSTEM)
-    val spicyEnabled by appPrefs.spicyContentEnabled.collectAsState(initial = false)
     val assignees by repository.observeAssignees().collectAsState(initial = emptyList())
     var renamingAssignee by remember { mutableStateOf<Assignee?>(null) }
     var deletingAssignee by remember { mutableStateOf<Assignee?>(null) }
@@ -135,24 +133,6 @@ fun StatsScreen(repository: Repository, appPrefs: AppPrefs) {
                             },
                         ) { Icon(Icons.Filled.Add, contentDescription = "Add assignee") }
                     }
-                }
-            }
-
-            Text("Content", style = androidx.compose.material3.MaterialTheme.typography.titleMedium)
-            Card(modifier = Modifier.fillMaxWidth()) {
-                Row(
-                    modifier = Modifier.padding(16.dp).fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("Show intimate activities", style = androidx.compose.material3.MaterialTheme.typography.bodyLarge)
-                        Text(
-                            "Solo and together intimate suggestions in \"For Us\". Off by default.",
-                            style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
-                        )
-                    }
-                    Switch(checked = spicyEnabled, onCheckedChange = { scope.launch { appPrefs.setSpicyContentEnabled(it) } })
                 }
             }
 

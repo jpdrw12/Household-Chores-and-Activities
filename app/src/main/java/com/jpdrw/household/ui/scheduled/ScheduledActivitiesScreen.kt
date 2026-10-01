@@ -50,14 +50,12 @@ import kotlinx.coroutines.launch
 @Composable
 fun ScheduledActivitiesScreen(repository: Repository, appPrefs: AppPrefs) {
     val today = DateUtils.today()
-    val spicyEnabled by appPrefs.spicyContentEnabled.collectAsState(initial = false)
     val allScheduled by repository.observeScheduledActivities().collectAsState(initial = emptyList())
     var showAll by remember { mutableStateOf(false) }
     var deletingActivity by remember { mutableStateOf<ParentalActivity?>(null) }
     val scope = rememberCoroutineScope()
 
     val visible = allScheduled
-        .filter { spicyEnabled || !it.activity.isSpicy }
         .filter { showAll || it.activity.scheduledDate == today }
 
     Scaffold(
