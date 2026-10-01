@@ -115,8 +115,8 @@ fun FamilyActivitiesScreen(repository: Repository) {
             title = "New activity",
             initial = null,
             onDismiss = { showAddDialog = false },
-            onConfirm = { actTitle, category, slot, quick ->
-                scope.launch { repository.addFamilyActivity(actTitle, category, slot, quick) }
+            onConfirm = { actTitle, category, slot, quick, notes ->
+                scope.launch { repository.addFamilyActivity(actTitle, category, slot, quick, notes) }
                 showAddDialog = false
             },
         )
@@ -127,8 +127,8 @@ fun FamilyActivitiesScreen(repository: Repository) {
             title = "Edit activity",
             initial = activity,
             onDismiss = { editingActivity = null },
-            onConfirm = { actTitle, category, slot, quick ->
-                scope.launch { repository.updateFamilyActivity(activity.id, actTitle, category, slot, quick) }
+            onConfirm = { actTitle, category, slot, quick, notes ->
+                scope.launch { repository.updateFamilyActivity(activity.id, actTitle, category, slot, quick, notes) }
                 editingActivity = null
             },
         )
@@ -180,6 +180,13 @@ private fun ActivityRow(activity: FamilyActivity, done: Boolean, onToggle: (Bool
                     },
                     style = MaterialTheme.typography.bodySmall,
                 )
+                if (!activity.notes.isNullOrBlank()) {
+                    Text(
+                        activity.notes,
+                        style = MaterialTheme.typography.bodySmall,
+                        fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
+                    )
+                }
             }
             IconButton(onClick = onEdit) { Icon(Icons.Filled.Edit, contentDescription = "Edit activity") }
             IconButton(onClick = onDelete) { Icon(Icons.Filled.Delete, contentDescription = "Delete activity") }
@@ -193,12 +200,13 @@ private fun FamilyActivityDialog(
     title: String,
     initial: FamilyActivity?,
     onDismiss: () -> Unit,
-    onConfirm: (String, ActivityCategory, ActivitySlot, Boolean) -> Unit,
+    onConfirm: (String, ActivityCategory, ActivitySlot, Boolean, String?) -> Unit,
 ) {
     var actTitle by remember { mutableStateOf(initial?.title ?: "") }
     var category by remember { mutableStateOf(initial?.category ?: ActivityCategory.INDOOR) }
     var slot by remember { mutableStateOf(initial?.slot ?: ActivitySlot.MID_PLAY) }
     var quickOption by remember { mutableStateOf(initial?.quickOption ?: false) }
+    var notes by remember { mutableStateOf(initial?.notes ?: "") }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -224,10 +232,17 @@ private fun FamilyActivityDialog(
                         Text("Quick (fits a tight pre-school window)")
                     }
                 }
+                androidx.compose.material3.OutlinedTextField(
+                    value = notes,
+                    onValueChange = { notes = it },
+                    label = { Text("Notes (optional)") },
+                    minLines = 2,
+                    modifier = Modifier.fillMaxWidth(),
+                )
             }
         },
         confirmButton = {
-            Button(enabled = actTitle.isNotBlank(), onClick = { onConfirm(actTitle.trim(), category, slot, quickOption) }) {
+            Button(enabled = actTitle.isNotBlank(), onClick = { onConfirm(actTitle.trim(), category, slot, quickOption, notes.trim().ifBlank { null }) }) {
                 Text(if (initial == null) "Add" else "Save")
             }
         },

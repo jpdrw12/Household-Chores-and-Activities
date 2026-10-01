@@ -30,6 +30,7 @@ data class Chore(
      *  date to roll over. */
     val startTime: String? = null,
     val estimatedEndTime: String? = null,
+    val notes: String? = null,
     val active: Boolean = true,
     val createdAt: Long = System.currentTimeMillis(),
 )
@@ -94,18 +95,18 @@ data class ChoreOccurrence(
     val completedPhotoUri: String? = null,
 )
 
-/** One chore placed into a given day's roadmap, in order. Lets a day's available tasks be
- *  strung together into a sequence on the Mapper tab, independent of completion state. */
-@Entity(
-    tableName = "chore_plan_entries",
-    foreignKeys = [
-        ForeignKey(entity = Chore::class, parentColumns = ["id"], childColumns = ["choreId"], onDelete = ForeignKey.CASCADE),
-    ],
-)
-data class ChorePlanEntry(
+enum class PlanItemType { CHORE, FAMILY_ACTIVITY, PARENTAL_ACTIVITY }
+
+/** One task (chore, family activity, or "For Us" activity) placed into a given day's roadmap, in
+ *  order. Lets a day's available tasks be strung together into a sequence on the Mapper tab,
+ *  independent of completion state. No FK here since [itemId] points at a different table
+ *  depending on [itemType]. */
+@Entity(tableName = "plan_entries")
+data class PlanEntry(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val date: String, // ISO yyyy-MM-dd
-    val choreId: Long,
+    val itemType: PlanItemType,
+    val itemId: Long,
     val sortOrder: Int,
 )
 
@@ -121,6 +122,7 @@ data class FamilyActivity(
     val slot: ActivitySlot,
     /** Fits a tight pre-school window. Gates which START_UP suggestions show on weekday mornings. */
     val quickOption: Boolean = false,
+    val notes: String? = null,
     val active: Boolean = true,
 )
 
@@ -150,6 +152,7 @@ data class ParentalActivity(
     val budget: BudgetTier,
     /** Intimate solo/together suggestion, hidden unless the admin "Show spicy activities" toggle is on. */
     val isSpicy: Boolean = false,
+    val notes: String? = null,
     val active: Boolean = true,
 )
 

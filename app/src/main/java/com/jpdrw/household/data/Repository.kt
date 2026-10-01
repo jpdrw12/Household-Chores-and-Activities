@@ -7,7 +7,6 @@ import com.jpdrw.household.data.entity.BudgetTier
 import com.jpdrw.household.data.entity.Chore
 import com.jpdrw.household.data.entity.ChoreOccurrence
 import com.jpdrw.household.data.entity.ChorePhoto
-import com.jpdrw.household.data.entity.ChorePlanEntry
 import com.jpdrw.household.data.entity.ChoreSubtask
 import com.jpdrw.household.data.entity.ChoreSubtaskCheck
 import com.jpdrw.household.data.entity.FamilyActivity
@@ -16,6 +15,8 @@ import com.jpdrw.household.data.entity.Frequency
 import com.jpdrw.household.data.entity.ParentalActivity
 import com.jpdrw.household.data.entity.ParentalActivityLog
 import com.jpdrw.household.data.entity.ParentalAudience
+import com.jpdrw.household.data.entity.PlanEntry
+import com.jpdrw.household.data.entity.PlanItemType
 import com.jpdrw.household.data.entity.Priority
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
@@ -39,6 +40,20 @@ data class SubtaskWithChecks(
     /** Assignee IDs who have checked this subtask off for the date in question. */
     val checkedByAssigneeIds: Set<Long>,
 )
+
+data class PlanTask(
+    val itemType: PlanItemType,
+    val itemId: Long,
+    val title: String,
+    val subtitle: String,
+    val isSpicy: Boolean = false,
+)
+
+private fun audienceLabel(audience: ParentalAudience): String = when (audience) {
+    ParentalAudience.PERSONAL -> "Personal"
+    ParentalAudience.TOGETHER -> "Together"
+    ParentalAudience.ADULT_ONLY -> "Adult only"
+}
 
 data class MonthlyStats(
     val choresCompleted: Int,
@@ -117,51 +132,77 @@ class Repository(private val db: AppDatabase) {
                 .sortedBy { it.chore.title }
         }
 
-    // --- Day roadmap (Mapper tab) ---
+    // --- Day roadmap (Mapper tab) — mixes chores, family activities, and "For Us" activities ---
 
-    /** Chores placed into [date]'s roadmap, in order, regardless of completion state. */
-    fun observeDayPlan(date: String): Flow<List<ChoreWithOccurrence>> =
+    private fun availableFamilyActivities(date: String): Flow<List<FamilyActivity>> =
+        combine(db.familyActivityDao().observeActive(), db.familyActivityDao().observeLogsForDate(date)) { activities, logs ->
+            val doneIds = logs.filter { it.done }.map { it.activityId }.toSet()
+            activities.filter { it.id !in doneIds }
+        }
+
+    private fun availableParentalActivities(): Flow<List<ParentalActivity>> =
+        combine(db.parentalActivityDao().observeActive(), db.parentalActivityDao().observeLogsForWeek(DateUtils.isoWeek())) { activities, logs ->
+            val doneIds = logs.filter { it.done }.map { it.activityId }.toSet()
+            activities.filter { it.id !in doneIds }
+        }
+
+    /** Tasks (of any type) due on [date] that haven't been placed into the roadmap yet. */
+    fun observeAvailableForPlan(date: String): Flow<List<PlanTask>> =
         combine(
-            db.chorePlanDao().observeForDate(date),
+            observeChoresForDate(date),
+            availableFamilyActivities(date),
+            availableParentalActivities(),
+            db.planDao().observeForDate(date),
+        ) { chores, familyActs, parentalActs, planned ->
+            val plannedKeys = planned.map { it.itemType to it.itemId }.toSet()
+            buildList {
+                chores.forEach { c -> add(PlanTask(PlanItemType.CHORE, c.chore.id, c.chore.title, c.assigneeName)) }
+                familyActs.forEach { a -> add(PlanTask(PlanItemType.FAMILY_ACTIVITY, a.id, a.title, if (a.category == ActivityCategory.INDOOR) "Indoor" else "Outdoor")) }
+                parentalActs.forEach { a -> add(PlanTask(PlanItemType.PARENTAL_ACTIVITY, a.id, a.title, audienceLabel(a.audience), isSpicy = a.isSpicy)) }
+            }.filter { (it.itemType to it.itemId) !in plannedKeys }
+        }
+
+    /** Tasks placed into [date]'s roadmap, in order, regardless of completion state. */
+    fun observeDayPlan(date: String): Flow<List<PlanTask>> =
+        combine(
+            db.planDao().observeForDate(date),
             db.choreDao().observeActive(),
             db.assigneeDao().observeAll(),
-            db.choreDao().observeOccurrencesForDate(date),
-        ) { entries, chores, assignees, occurrences ->
+            db.familyActivityDao().observeActive(),
+            db.parentalActivityDao().observeActive(),
+        ) { entries, chores, assignees, familyActs, parentalActs ->
             val choresById = chores.associateBy { it.id }
             val assigneeNames = assignees.associateBy { it.id }
-            val occByChore = occurrences.associateBy { it.choreId }
+            val familyById = familyActs.associateBy { it.id }
+            val parentalById = parentalActs.associateBy { it.id }
             entries.sortedBy { it.sortOrder }.mapNotNull { entry ->
-                val chore = choresById[entry.choreId] ?: return@mapNotNull null
-                ChoreWithOccurrence(
-                    chore = chore,
-                    occurrence = occByChore[chore.id],
-                    assigneeName = assigneeNames[chore.assigneeId]?.name ?: "Family",
-                    effectiveDueDate = date,
-                    isOverdue = false,
-                )
+                when (entry.itemType) {
+                    PlanItemType.CHORE -> choresById[entry.itemId]?.let { c ->
+                        PlanTask(PlanItemType.CHORE, c.id, c.title, assigneeNames[c.assigneeId]?.name ?: "Family")
+                    }
+                    PlanItemType.FAMILY_ACTIVITY -> familyById[entry.itemId]?.let { a ->
+                        PlanTask(PlanItemType.FAMILY_ACTIVITY, a.id, a.title, if (a.category == ActivityCategory.INDOOR) "Indoor" else "Outdoor")
+                    }
+                    PlanItemType.PARENTAL_ACTIVITY -> parentalById[entry.itemId]?.let { a ->
+                        PlanTask(PlanItemType.PARENTAL_ACTIVITY, a.id, a.title, audienceLabel(a.audience), isSpicy = a.isSpicy)
+                    }
+                }
             }
         }
 
-    /** Chores due on [date] that haven't been placed into the roadmap yet. */
-    fun observeAvailableForPlan(date: String): Flow<List<ChoreWithOccurrence>> =
-        combine(observeChoresForDate(date), db.chorePlanDao().observeForDate(date)) { due, planned ->
-            val plannedChoreIds = planned.map { it.choreId }.toSet()
-            due.filter { it.chore.id !in plannedChoreIds }
-        }
-
-    suspend fun addToPlan(date: String, choreId: Long) {
-        val dao = db.chorePlanDao()
+    suspend fun addToPlan(date: String, itemType: PlanItemType, itemId: Long) {
+        val dao = db.planDao()
         val nextOrder = (dao.maxSortOrder(date) ?: -1) + 1
-        dao.insert(ChorePlanEntry(date = date, choreId = choreId, sortOrder = nextOrder))
+        dao.insert(PlanEntry(date = date, itemType = itemType, itemId = itemId, sortOrder = nextOrder))
     }
 
-    suspend fun removeFromPlan(date: String, choreId: Long) = db.chorePlanDao().deleteEntry(date, choreId)
+    suspend fun removeFromPlan(date: String, itemType: PlanItemType, itemId: Long) = db.planDao().deleteEntry(date, itemType, itemId)
 
-    suspend fun reorderPlan(date: String, orderedChoreIds: List<Long>) {
-        val dao = db.chorePlanDao()
+    suspend fun reorderPlan(date: String, orderedItems: List<Pair<PlanItemType, Long>>) {
+        val dao = db.planDao()
         dao.deleteAllForDate(date)
-        orderedChoreIds.forEachIndexed { index, choreId ->
-            dao.insert(ChorePlanEntry(date = date, choreId = choreId, sortOrder = index))
+        orderedItems.forEachIndexed { index, (itemType, itemId) ->
+            dao.insert(PlanEntry(date = date, itemType = itemType, itemId = itemId, sortOrder = index))
         }
     }
 
@@ -209,6 +250,7 @@ class Repository(private val db: AppDatabase) {
         priority: Priority = Priority.NORMAL,
         startTime: String? = null,
         estimatedEndTime: String? = null,
+        notes: String? = null,
     ) = db.choreDao().insert(
         Chore(
             title = title,
@@ -218,6 +260,7 @@ class Repository(private val db: AppDatabase) {
             priority = priority,
             startTime = startTime,
             estimatedEndTime = estimatedEndTime,
+            notes = notes,
         ),
     )
 
@@ -230,6 +273,7 @@ class Repository(private val db: AppDatabase) {
         priority: Priority = Priority.NORMAL,
         startTime: String? = null,
         estimatedEndTime: String? = null,
+        notes: String? = null,
     ) {
         val existing = db.choreDao().findById(choreId) ?: return
         db.choreDao().update(
@@ -241,6 +285,7 @@ class Repository(private val db: AppDatabase) {
                 priority = priority,
                 startTime = startTime,
                 estimatedEndTime = estimatedEndTime,
+                notes = notes,
             ),
         )
     }
@@ -295,11 +340,11 @@ class Repository(private val db: AppDatabase) {
         )
     }
 
-    suspend fun addFamilyActivity(title: String, category: ActivityCategory, slot: ActivitySlot, quickOption: Boolean = false) =
-        db.familyActivityDao().insert(FamilyActivity(title = title, category = category, slot = slot, quickOption = quickOption))
+    suspend fun addFamilyActivity(title: String, category: ActivityCategory, slot: ActivitySlot, quickOption: Boolean = false, notes: String? = null) =
+        db.familyActivityDao().insert(FamilyActivity(title = title, category = category, slot = slot, quickOption = quickOption, notes = notes))
 
-    suspend fun updateFamilyActivity(id: Long, title: String, category: ActivityCategory, slot: ActivitySlot, quickOption: Boolean = false) =
-        db.familyActivityDao().update(FamilyActivity(id = id, title = title, category = category, slot = slot, quickOption = quickOption))
+    suspend fun updateFamilyActivity(id: Long, title: String, category: ActivityCategory, slot: ActivitySlot, quickOption: Boolean = false, notes: String? = null) =
+        db.familyActivityDao().update(FamilyActivity(id = id, title = title, category = category, slot = slot, quickOption = quickOption, notes = notes))
 
     suspend fun deleteFamilyActivity(id: Long) = db.familyActivityDao().delete(id)
 
@@ -314,11 +359,11 @@ class Repository(private val db: AppDatabase) {
         )
     }
 
-    suspend fun addParentalActivity(title: String, audience: ParentalAudience, budget: BudgetTier, isSpicy: Boolean = false) =
-        db.parentalActivityDao().insert(ParentalActivity(title = title, audience = audience, budget = budget, isSpicy = isSpicy))
+    suspend fun addParentalActivity(title: String, audience: ParentalAudience, budget: BudgetTier, isSpicy: Boolean = false, notes: String? = null) =
+        db.parentalActivityDao().insert(ParentalActivity(title = title, audience = audience, budget = budget, isSpicy = isSpicy, notes = notes))
 
-    suspend fun updateParentalActivity(id: Long, title: String, audience: ParentalAudience, budget: BudgetTier, isSpicy: Boolean = false) =
-        db.parentalActivityDao().update(ParentalActivity(id = id, title = title, audience = audience, budget = budget, isSpicy = isSpicy))
+    suspend fun updateParentalActivity(id: Long, title: String, audience: ParentalAudience, budget: BudgetTier, isSpicy: Boolean = false, notes: String? = null) =
+        db.parentalActivityDao().update(ParentalActivity(id = id, title = title, audience = audience, budget = budget, isSpicy = isSpicy, notes = notes))
 
     suspend fun deleteParentalActivity(id: Long) = db.parentalActivityDao().delete(id)
 

@@ -98,8 +98,8 @@ fun ParentalActivitiesScreen(repository: Repository, appPrefs: AppPrefs) {
             title = "New activity",
             initial = null,
             onDismiss = { showAddDialog = false },
-            onConfirm = { actTitle, audience, budget, isSpicy ->
-                scope.launch { repository.addParentalActivity(actTitle, audience, budget, isSpicy) }
+            onConfirm = { actTitle, audience, budget, isSpicy, notes ->
+                scope.launch { repository.addParentalActivity(actTitle, audience, budget, isSpicy, notes) }
                 showAddDialog = false
             },
         )
@@ -110,8 +110,8 @@ fun ParentalActivitiesScreen(repository: Repository, appPrefs: AppPrefs) {
             title = "Edit activity",
             initial = activity,
             onDismiss = { editingActivity = null },
-            onConfirm = { actTitle, audience, budget, isSpicy ->
-                scope.launch { repository.updateParentalActivity(activity.id, actTitle, audience, budget, isSpicy) }
+            onConfirm = { actTitle, audience, budget, isSpicy, notes ->
+                scope.launch { repository.updateParentalActivity(activity.id, actTitle, audience, budget, isSpicy, notes) }
                 editingActivity = null
             },
         )
@@ -163,6 +163,13 @@ private fun ParentalRow(activity: ParentalActivity, done: Boolean, onToggle: (Bo
                     if (activity.isSpicy) "${activity.budget.label()} · 💞 Intimate" else activity.budget.label(),
                     style = MaterialTheme.typography.bodySmall,
                 )
+                if (!activity.notes.isNullOrBlank()) {
+                    Text(
+                        activity.notes,
+                        style = MaterialTheme.typography.bodySmall,
+                        fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
+                    )
+                }
             }
             IconButton(onClick = onEdit) { Icon(Icons.Filled.Edit, contentDescription = "Edit activity") }
             IconButton(onClick = onDelete) { Icon(Icons.Filled.Delete, contentDescription = "Delete activity") }
@@ -176,12 +183,13 @@ private fun ParentalActivityDialog(
     title: String,
     initial: ParentalActivity?,
     onDismiss: () -> Unit,
-    onConfirm: (String, ParentalAudience, BudgetTier, Boolean) -> Unit,
+    onConfirm: (String, ParentalAudience, BudgetTier, Boolean, String?) -> Unit,
 ) {
     var actTitle by remember { mutableStateOf(initial?.title ?: "") }
     var audience by remember { mutableStateOf(initial?.audience ?: ParentalAudience.TOGETHER) }
     var budget by remember { mutableStateOf(initial?.budget ?: BudgetTier.LOW) }
     var isSpicy by remember { mutableStateOf(initial?.isSpicy ?: false) }
+    var notes by remember { mutableStateOf(initial?.notes ?: "") }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -205,10 +213,17 @@ private fun ParentalActivityDialog(
                     Checkbox(checked = isSpicy, onCheckedChange = { isSpicy = it })
                     Text("💞 Intimate (solo/together, hidden unless admin toggle is on)")
                 }
+                OutlinedTextField(
+                    value = notes,
+                    onValueChange = { notes = it },
+                    label = { Text("Notes (optional)") },
+                    minLines = 2,
+                    modifier = Modifier.fillMaxWidth(),
+                )
             }
         },
         confirmButton = {
-            Button(enabled = actTitle.isNotBlank(), onClick = { onConfirm(actTitle.trim(), audience, budget, isSpicy) }) {
+            Button(enabled = actTitle.isNotBlank(), onClick = { onConfirm(actTitle.trim(), audience, budget, isSpicy, notes.trim().ifBlank { null }) }) {
                 Text(if (initial == null) "Add" else "Save")
             }
         },

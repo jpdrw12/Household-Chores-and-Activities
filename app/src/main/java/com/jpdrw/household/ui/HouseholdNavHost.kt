@@ -81,7 +81,7 @@ fun HouseholdNavHost(repository: Repository, appPrefs: AppPrefs) {
             modifier = Modifier.padding(innerPadding),
         ) {
             composable(Destination.Chores.route) { ChoresScreen(repository) }
-            composable(Destination.Mapper.route) { TaskMapperScreen(repository) }
+            composable(Destination.Mapper.route) { TaskMapperScreen(repository, appPrefs) }
             composable(Destination.Activities.route) { FamilyActivitiesScreen(repository) }
             composable(Destination.Parental.route) { ParentalActivitiesScreen(repository, appPrefs) }
             composable(Destination.Stats.route) { StatsScreen(repository, appPrefs) }

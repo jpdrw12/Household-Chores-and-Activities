@@ -6,6 +6,7 @@ import com.jpdrw.household.data.entity.ActivitySlot
 import com.jpdrw.household.data.entity.BudgetTier
 import com.jpdrw.household.data.entity.Frequency
 import com.jpdrw.household.data.entity.ParentalAudience
+import com.jpdrw.household.data.entity.PlanItemType
 import com.jpdrw.household.data.entity.Priority
 
 class Converters {
@@ -38,4 +39,9 @@ class Converters {
     fun priorityToString(value: Priority): String = value.name
     @TypeConverter
     fun stringToPriority(value: String): Priority = Priority.valueOf(value)
+
+    @TypeConverter
+    fun planItemTypeToString(value: PlanItemType): String = value.name
+    @TypeConverter
+    fun stringToPlanItemType(value: String): PlanItemType = PlanItemType.valueOf(value)
 }

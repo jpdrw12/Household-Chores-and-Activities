@@ -10,7 +10,8 @@ import com.jpdrw.household.data.entity.Assignee
 import com.jpdrw.household.data.entity.Chore
 import com.jpdrw.household.data.entity.ChoreOccurrence
 import com.jpdrw.household.data.entity.ChorePhoto
-import com.jpdrw.household.data.entity.ChorePlanEntry
+import com.jpdrw.household.data.entity.PlanEntry
+import com.jpdrw.household.data.entity.PlanItemType
 import com.jpdrw.household.data.entity.ChoreSubtask
 import com.jpdrw.household.data.entity.ChoreSubtaskCheck
 import com.jpdrw.household.data.entity.FamilyActivity
@@ -40,20 +41,20 @@ interface AssigneeDao {
 }
 
 @Dao
-interface ChorePlanDao {
-    @Query("SELECT * FROM chore_plan_entries WHERE date = :date ORDER BY sortOrder ASC")
-    fun observeForDate(date: String): Flow<List<ChorePlanEntry>>
+interface PlanDao {
+    @Query("SELECT * FROM plan_entries WHERE date = :date ORDER BY sortOrder ASC")
+    fun observeForDate(date: String): Flow<List<PlanEntry>>
 
     @Insert
-    suspend fun insert(entry: ChorePlanEntry): Long
+    suspend fun insert(entry: PlanEntry): Long
 
-    @Query("DELETE FROM chore_plan_entries WHERE date = :date AND choreId = :choreId")
-    suspend fun deleteEntry(date: String, choreId: Long)
+    @Query("DELETE FROM plan_entries WHERE date = :date AND itemType = :itemType AND itemId = :itemId")
+    suspend fun deleteEntry(date: String, itemType: PlanItemType, itemId: Long)
 
-    @Query("DELETE FROM chore_plan_entries WHERE date = :date")
+    @Query("DELETE FROM plan_entries WHERE date = :date")
     suspend fun deleteAllForDate(date: String)
 
-    @Query("SELECT MAX(sortOrder) FROM chore_plan_entries WHERE date = :date")
+    @Query("SELECT MAX(sortOrder) FROM plan_entries WHERE date = :date")
     suspend fun maxSortOrder(date: String): Int?
 }
 

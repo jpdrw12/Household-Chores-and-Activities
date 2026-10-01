@@ -8,10 +8,10 @@ import androidx.room.TypeConverters
 import com.jpdrw.household.data.dao.AssigneeDao
 import com.jpdrw.household.data.dao.ChoreDao
 import com.jpdrw.household.data.dao.ChorePhotoDao
-import com.jpdrw.household.data.dao.ChorePlanDao
 import com.jpdrw.household.data.dao.ChoreSubtaskDao
 import com.jpdrw.household.data.dao.FamilyActivityDao
 import com.jpdrw.household.data.dao.ParentalActivityDao
+import com.jpdrw.household.data.dao.PlanDao
 import com.jpdrw.household.data.entity.ActivityCategory
 import com.jpdrw.household.data.entity.ActivitySlot
 import com.jpdrw.household.data.entity.Assignee
@@ -19,13 +19,13 @@ import com.jpdrw.household.data.entity.BudgetTier
 import com.jpdrw.household.data.entity.Chore
 import com.jpdrw.household.data.entity.ChoreOccurrence
 import com.jpdrw.household.data.entity.ChorePhoto
-import com.jpdrw.household.data.entity.ChorePlanEntry
 import com.jpdrw.household.data.entity.ChoreSubtask
 import com.jpdrw.household.data.entity.ChoreSubtaskCheck
 import com.jpdrw.household.data.entity.FamilyActivity
 import com.jpdrw.household.data.entity.Frequency
 import com.jpdrw.household.data.entity.ParentalActivity
 import com.jpdrw.household.data.entity.ParentalAudience
+import com.jpdrw.household.data.entity.PlanEntry
 import kotlinx.coroutines.flow.first
 
 @Database(
@@ -34,7 +34,7 @@ import kotlinx.coroutines.flow.first
         Chore::class,
         ChoreOccurrence::class,
         ChorePhoto::class,
-        ChorePlanEntry::class,
+        PlanEntry::class,
         ChoreSubtask::class,
         ChoreSubtaskCheck::class,
         FamilyActivity::class,
@@ -46,7 +46,7 @@ import kotlinx.coroutines.flow.first
     // below). Room only takes the destructive-migration path when the version number itself
     // changes — leaving it the same while the schema drifts hits a hard identity-hash crash on
     // any device with an existing install, instead of a clean wipe-and-reseed.
-    version = 3,
+    version = 5,
     exportSchema = false,
 )
 @TypeConverters(Converters::class)
@@ -54,7 +54,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun assigneeDao(): AssigneeDao
     abstract fun choreDao(): ChoreDao
     abstract fun chorePhotoDao(): ChorePhotoDao
-    abstract fun chorePlanDao(): ChorePlanDao
+    abstract fun planDao(): PlanDao
     abstract fun choreSubtaskDao(): ChoreSubtaskDao
     abstract fun familyActivityDao(): FamilyActivityDao
     abstract fun parentalActivityDao(): ParentalActivityDao

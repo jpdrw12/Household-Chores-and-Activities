@@ -7,6 +7,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -38,22 +40,28 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
-import com.jpdrw.household.data.ChoreWithOccurrence
+import com.jpdrw.household.data.AppPrefs
 import com.jpdrw.household.data.DateUtils
+import com.jpdrw.household.data.PlanTask
 import com.jpdrw.household.data.Repository
+import com.jpdrw.household.data.entity.PlanItemType
 import kotlinx.coroutines.launch
 
 /**
- * Lets the day's available chores be tapped into a roadmap, then dragged (long-press the handle)
- * into whatever order the day should actually run in. Independent of completion state — the point
- * is sequencing, not tracking what's done (that's the Chores tab).
+ * Lets the day's available chores, family activities, and "For Us" activities be tapped into a
+ * roadmap, then dragged (long-press the handle) into whatever order the day should actually run
+ * in. Independent of completion state — the point is sequencing, not tracking what's done (that's
+ * the Chores/Activities/For Us tabs).
  */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
-fun TaskMapperScreen(repository: Repository) {
+fun TaskMapperScreen(repository: Repository, appPrefs: AppPrefs) {
     val today = DateUtils.today()
-    val available by repository.observeAvailableForPlan(today).collectAsState(initial = emptyList())
-    val planned by repository.observeDayPlan(today).collectAsState(initial = emptyList())
+    val spicyEnabled by appPrefs.spicyContentEnabled.collectAsState(initial = false)
+    val availableRaw by repository.observeAvailableForPlan(today).collectAsState(initial = emptyList())
+    val plannedRaw by repository.observeDayPlan(today).collectAsState(initial = emptyList())
+    val available = availableRaw.filter { spicyEnabled || !it.isSpicy }
+    val planned = plannedRaw.filter { spicyEnabled || !it.isSpicy }
     val scope = rememberCoroutineScope()
 
     Scaffold(topBar = { TopAppBar(title = { Text("Day Roadmap") }) }) { padding ->
@@ -64,18 +72,18 @@ fun TaskMapperScreen(repository: Repository) {
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            androidx.compose.foundation.layout.Spacer(modifier = Modifier.padding(top = 8.dp))
+            Spacer(modifier = Modifier.padding(top = 8.dp))
             if (available.isEmpty()) {
-                Text("All of today's chores are already in the roadmap.", style = MaterialTheme.typography.bodySmall)
+                Text("Everything available today is already in the roadmap.", style = MaterialTheme.typography.bodySmall)
             } else {
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    available.forEach { item ->
-                        AvailableTaskCard(item = item, onClick = { scope.launch { repository.addToPlan(today, item.chore.id) } })
+                    available.forEach { task ->
+                        AvailableTaskCard(task = task, onClick = { scope.launch { repository.addToPlan(today, task.itemType, task.itemId) } })
                     }
                 }
             }
 
-            androidx.compose.foundation.layout.Spacer(modifier = Modifier.padding(top = 24.dp))
+            Spacer(modifier = Modifier.padding(top = 24.dp))
             Text("Today's roadmap", style = MaterialTheme.typography.titleMedium)
             if (planned.isEmpty()) {
                 Text(
@@ -87,29 +95,36 @@ fun TaskMapperScreen(repository: Repository) {
             } else {
                 ReorderablePlanList(
                     items = planned,
-                    onReorder = { newOrder -> scope.launch { repository.reorderPlan(today, newOrder.map { it.chore.id }) } },
-                    onRemove = { choreId -> scope.launch { repository.removeFromPlan(today, choreId) } },
+                    onReorder = { newOrder -> scope.launch { repository.reorderPlan(today, newOrder.map { it.itemType to it.itemId }) } },
+                    onRemove = { task -> scope.launch { repository.removeFromPlan(today, task.itemType, task.itemId) } },
                 )
             }
         }
     }
 }
 
+private fun PlanItemType.label(): String = when (this) {
+    PlanItemType.CHORE -> "Chore"
+    PlanItemType.FAMILY_ACTIVITY -> "Activity"
+    PlanItemType.PARENTAL_ACTIVITY -> "For Us"
+}
+
 @Composable
-private fun AvailableTaskCard(item: ChoreWithOccurrence, onClick: () -> Unit) {
+private fun AvailableTaskCard(task: PlanTask, onClick: () -> Unit) {
     Card(modifier = Modifier.clickable(onClick = onClick)) {
         Column(modifier = Modifier.padding(12.dp)) {
-            Text(item.chore.title, style = MaterialTheme.typography.bodyMedium)
-            Text(item.assigneeName, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(task.itemType.label(), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+            Text(task.title, style = MaterialTheme.typography.bodyMedium)
+            Text(task.subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
 
 @Composable
 private fun ReorderablePlanList(
-    items: List<ChoreWithOccurrence>,
-    onReorder: (List<ChoreWithOccurrence>) -> Unit,
-    onRemove: (Long) -> Unit,
+    items: List<PlanTask>,
+    onReorder: (List<PlanTask>) -> Unit,
+    onRemove: (PlanTask) -> Unit,
 ) {
     var list by remember(items) { mutableStateOf(items) }
     var draggingIndex by remember { mutableStateOf(-1) }
@@ -117,8 +132,8 @@ private fun ReorderablePlanList(
     val itemHeightPx = with(LocalDensity.current) { 76.dp.toPx() }
 
     Column(verticalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.padding(top = 8.dp)) {
-        list.forEach { item ->
-            val index = list.indexOf(item)
+        list.forEach { task ->
+            val index = list.indexOf(task)
             val isDragging = index == draggingIndex
             Card(
                 modifier = Modifier
@@ -127,16 +142,17 @@ private fun ReorderablePlanList(
                     .zIndex(if (isDragging) 1f else 0f),
             ) {
                 Box {
-                    androidx.compose.foundation.layout.Row(
+                    Row(
                         modifier = Modifier.padding(12.dp).fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text("${index + 1}.", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(end = 8.dp))
                         Column(modifier = Modifier.weight(1f)) {
-                            Text(item.chore.title, style = MaterialTheme.typography.bodyLarge)
-                            Text(item.assigneeName, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(task.itemType.label(), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                            Text(task.title, style = MaterialTheme.typography.bodyLarge)
+                            Text(task.subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
-                        IconButton(onClick = { onRemove(item.chore.id) }) {
+                        IconButton(onClick = { onRemove(task) }) {
                             Icon(Icons.Filled.Close, contentDescription = "Remove from roadmap")
                         }
                         Icon(
@@ -144,10 +160,10 @@ private fun ReorderablePlanList(
                             contentDescription = "Drag to reorder",
                             modifier = Modifier
                                 .size(28.dp)
-                                .pointerInput(item.chore.id) {
+                                .pointerInput(task.itemType, task.itemId) {
                                     detectDragGesturesAfterLongPress(
                                         onDragStart = {
-                                            draggingIndex = list.indexOf(item)
+                                            draggingIndex = list.indexOf(task)
                                             dragOffset = 0f
                                         },
                                         onDragEnd = {
