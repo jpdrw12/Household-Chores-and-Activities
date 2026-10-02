@@ -91,10 +91,10 @@ class Repository(private val db: AppDatabase) {
     private val activityIdeaSync = ActivityIdeaSync(db.activityIdeaDao())
     private val familyActivityLogSync = FamilyActivityLogSync(db.familyActivityDao())
     private val parentalActivityLogSync = ParentalActivityLogSync(db.parentalActivityDao())
-    private val chorePhotoSync = ChorePhotoSync(db.chorePhotoDao())
 
     /** Starts mirroring every synced Firestore collection into Room. Call once, after sign-in,
-     *  from HouseholdApp — see each XxxSync class's own doc comment for the design. */
+     *  from HouseholdApp — see each XxxSync class's own doc comment for the design. ChorePhoto is
+     *  the one entity NOT synced (local file:// URIs, see its own doc comment). */
     fun startSync(scope: kotlinx.coroutines.CoroutineScope) {
         assigneeSync.start(scope)
         choreSync.start(scope)
@@ -105,7 +105,6 @@ class Repository(private val db: AppDatabase) {
         choreSubtaskCheckSync.start(scope)
         activityIdeaSync.start(scope)
         familyActivityLogSync.start(scope)
-        chorePhotoSync.start(scope)
         parentalActivityLogSync.start(scope)
     }
 
@@ -399,32 +398,8 @@ class Repository(private val db: AppDatabase) {
     }
 
     fun observeChorePhotos(choreId: String): Flow<List<ChorePhoto>> = db.chorePhotoDao().observeForChore(choreId)
-
-    /** Inserts the local-only row immediately (so the thumbnail shows right away) and returns it;
-     *  call [uploadChorePhoto] afterward with the photo's bytes to sync it across devices. Kept as
-     *  two steps because reading the bytes needs a Context/ContentResolver, which the UI layer
-     *  has and the Repository deliberately doesn't. */
-    suspend fun addChorePhoto(choreId: String, uri: String): ChorePhoto {
-        val photo = ChorePhoto(choreId = choreId, uri = uri)
-        db.chorePhotoDao().insert(photo)
-        return photo
-    }
-
-    /** Uploads to Firebase Storage and, on success, records the download URL both locally and in
-     *  Firestore. Silently does nothing on failure (offline, etc.) — the photo still works fine
-     *  locally via [ChorePhoto.uri]; it just doesn't sync until a later retry (there isn't one
-     *  yet — this is a known gap, same spirit as every other sync failure in this app). */
-    suspend fun uploadChorePhoto(photo: ChorePhoto, bytes: ByteArray) {
-        val remoteUrl = chorePhotoSync.upload(photo.id, photo.choreId, bytes) ?: return
-        val updated = photo.copy(remoteUrl = remoteUrl)
-        db.chorePhotoDao().update(updated)
-        chorePhotoSync.push(updated)
-    }
-
-    suspend fun deleteChorePhoto(photo: ChorePhoto) {
-        db.chorePhotoDao().delete(photo.id)
-        chorePhotoSync.delete(photo.id, photo.choreId)
-    }
+    suspend fun addChorePhoto(choreId: String, uri: String) = db.chorePhotoDao().insert(ChorePhoto(choreId = choreId, uri = uri))
+    suspend fun deleteChorePhoto(photoId: Long) = db.chorePhotoDao().delete(photoId)
 
     // --- Chore subtasks ---
     fun observeSubtasks(choreId: String, date: String): Flow<List<SubtaskWithChecks>> =

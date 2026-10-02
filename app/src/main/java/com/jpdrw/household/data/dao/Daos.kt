@@ -126,14 +126,11 @@ interface ChorePhotoDao {
     @Query("SELECT * FROM chore_photos WHERE choreId = :choreId ORDER BY addedAt ASC")
     fun observeForChore(choreId: String): Flow<List<ChorePhoto>>
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insert(photo: ChorePhoto)
-
-    @Update
-    suspend fun update(photo: ChorePhoto)
+    @Insert
+    suspend fun insert(photo: ChorePhoto): Long
 
     @Query("DELETE FROM chore_photos WHERE id = :photoId")
-    suspend fun delete(photoId: String)
+    suspend fun delete(photoId: Long)
 }
 
 @Dao
