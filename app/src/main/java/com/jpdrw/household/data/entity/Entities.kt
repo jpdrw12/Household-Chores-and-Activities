@@ -138,10 +138,13 @@ data class PlanEntry(
 enum class ActivityCategory { INDOOR, OUTDOOR }
 enum class ActivitySlot { START_UP, MID_PLAY, WIND_DOWN, BEDTIME }
 
-/** A kid/family-friendly activity suggestion. */
+/** A kid/family-friendly activity suggestion.
+ *
+ *  Id is a client-generated UUID string, same reasoning as [Assignee.id]/[Chore.id] — this entity
+ *  syncs to Firestore too (see FamilyActivitySync.kt). */
 @Entity(tableName = "family_activities")
 data class FamilyActivity(
-    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    @PrimaryKey val id: String = UUID.randomUUID().toString(),
     val title: String,
     val category: ActivityCategory,
     val slot: ActivitySlot,
@@ -161,7 +164,7 @@ data class FamilyActivity(
 )
 data class ActivityIdea(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
-    val activityId: Long,
+    val activityId: String,
     val text: String,
     val sortOrder: Int = 0,
 )
@@ -175,7 +178,7 @@ data class ActivityIdea(
 )
 data class FamilyActivityLog(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
-    val activityId: Long,
+    val activityId: String,
     val date: String, // ISO yyyy-MM-dd
     val done: Boolean = false,
 )

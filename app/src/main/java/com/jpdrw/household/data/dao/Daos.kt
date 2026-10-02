@@ -159,20 +159,23 @@ interface FamilyActivityDao {
     @Query("SELECT * FROM family_activities WHERE active = 1 ORDER BY title ASC")
     fun observeActive(): Flow<List<FamilyActivity>>
 
-    @Insert
-    suspend fun insert(activity: FamilyActivity): Long
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insert(activity: FamilyActivity)
+
+    @Query("SELECT * FROM family_activities WHERE id = :activityId LIMIT 1")
+    suspend fun findById(activityId: String): FamilyActivity?
 
     @Update
     suspend fun update(activity: FamilyActivity)
 
     @Query("DELETE FROM family_activities WHERE id = :activityId")
-    suspend fun delete(activityId: Long)
+    suspend fun delete(activityId: String)
 
     @Query("SELECT * FROM family_activity_logs WHERE date = :date")
     fun observeLogsForDate(date: String): Flow<List<FamilyActivityLog>>
 
     @Query("SELECT * FROM family_activity_logs WHERE activityId = :activityId AND date = :date LIMIT 1")
-    suspend fun findLog(activityId: Long, date: String): FamilyActivityLog?
+    suspend fun findLog(activityId: String, date: String): FamilyActivityLog?
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertLog(log: FamilyActivityLog)
@@ -184,10 +187,10 @@ interface FamilyActivityDao {
 @Dao
 interface ActivityIdeaDao {
     @Query("SELECT * FROM activity_ideas WHERE activityId = :activityId ORDER BY sortOrder ASC, id ASC")
-    fun observeForActivity(activityId: Long): Flow<List<ActivityIdea>>
+    fun observeForActivity(activityId: String): Flow<List<ActivityIdea>>
 
     @Query("SELECT * FROM activity_ideas WHERE activityId = :activityId ORDER BY sortOrder ASC, id ASC")
-    suspend fun listForActivity(activityId: Long): List<ActivityIdea>
+    suspend fun listForActivity(activityId: String): List<ActivityIdea>
 
     @Insert
     suspend fun insert(idea: ActivityIdea): Long

@@ -83,12 +83,15 @@ private const val MAX_OVERDUE_LOOKBACK_DAYS = 60
 class Repository(private val db: AppDatabase) {
     private val assigneeSync = AssigneeSync(db.assigneeDao())
     private val choreSync = ChoreSync(db.choreDao())
+    private val familyActivitySync = FamilyActivitySync(db.familyActivityDao())
 
-    /** Starts mirroring the Firestore `assignees`/`chores` collections into Room. Call once, after
-     *  sign-in, from HouseholdApp — see AssigneeSync/ChoreSync's own doc comments for the design. */
+    /** Starts mirroring the Firestore `assignees`/`chores`/`family_activities` collections into
+     *  Room. Call once, after sign-in, from HouseholdApp — see each XxxSync class's own doc
+     *  comment for the design. */
     fun startSync(scope: kotlinx.coroutines.CoroutineScope) {
         assigneeSync.start(scope)
         choreSync.start(scope)
+        familyActivitySync.start(scope)
     }
 
 
@@ -199,7 +202,7 @@ class Repository(private val db: AppDatabase) {
             val plannedKeys = planned.map { it.itemType to it.itemId }.toSet()
             buildList {
                 chores.forEach { c -> add(PlanTask(PlanItemType.CHORE, c.chore.id, c.chore.title, c.assigneeName)) }
-                familyActs.forEach { a -> add(PlanTask(PlanItemType.FAMILY_ACTIVITY, a.id.toString(), a.title, if (a.category == ActivityCategory.INDOOR) "Indoor" else "Outdoor")) }
+                familyActs.forEach { a -> add(PlanTask(PlanItemType.FAMILY_ACTIVITY, a.id, a.title, if (a.category == ActivityCategory.INDOOR) "Indoor" else "Outdoor")) }
                 parentalActs.forEach { a -> add(PlanTask(PlanItemType.PARENTAL_ACTIVITY, a.id.toString(), a.title, audienceLabel(a.audience), isSpicy = a.isSpicy, isScheduledToday = a.scheduledDate == date)) }
             }.filter { (it.itemType to it.itemId) !in plannedKeys }
         }
@@ -222,8 +225,8 @@ class Repository(private val db: AppDatabase) {
                     PlanItemType.CHORE -> choresById[entry.itemId]?.let { c ->
                         PlanTask(PlanItemType.CHORE, c.id, c.title, assigneeNames[c.assigneeId]?.name ?: "Family")
                     }
-                    PlanItemType.FAMILY_ACTIVITY -> entry.itemId.toLongOrNull()?.let { familyById[it] }?.let { a ->
-                        PlanTask(PlanItemType.FAMILY_ACTIVITY, a.id.toString(), a.title, if (a.category == ActivityCategory.INDOOR) "Indoor" else "Outdoor")
+                    PlanItemType.FAMILY_ACTIVITY -> familyById[entry.itemId]?.let { a ->
+                        PlanTask(PlanItemType.FAMILY_ACTIVITY, a.id, a.title, if (a.category == ActivityCategory.INDOOR) "Indoor" else "Outdoor")
                     }
                     PlanItemType.PARENTAL_ACTIVITY -> entry.itemId.toLongOrNull()?.let { parentalById[it] }?.let { a ->
                         PlanTask(PlanItemType.PARENTAL_ACTIVITY, a.id.toString(), a.title, audienceLabel(a.audience), isSpicy = a.isSpicy, isScheduledToday = a.scheduledDate == entry.date)
@@ -423,23 +426,32 @@ class Repository(private val db: AppDatabase) {
     fun observeFamilyActivities(): Flow<List<FamilyActivity>> = db.familyActivityDao().observeActive()
     fun observeFamilyActivityLogs(date: String): Flow<List<FamilyActivityLog>> = db.familyActivityDao().observeLogsForDate(date)
 
-    suspend fun setFamilyActivityDone(activityId: Long, date: String, done: Boolean) {
+    suspend fun setFamilyActivityDone(activityId: String, date: String, done: Boolean) {
         val existing = db.familyActivityDao().findLog(activityId, date)
         db.familyActivityDao().upsertLog(
             (existing ?: FamilyActivityLog(activityId = activityId, date = date)).copy(done = done, id = existing?.id ?: 0),
         )
     }
 
-    suspend fun addFamilyActivity(title: String, category: ActivityCategory, slot: ActivitySlot, quickOption: Boolean = false, notes: String? = null) =
-        db.familyActivityDao().insert(FamilyActivity(title = title, category = category, slot = slot, quickOption = quickOption, notes = notes))
+    suspend fun addFamilyActivity(title: String, category: ActivityCategory, slot: ActivitySlot, quickOption: Boolean = false, notes: String? = null) {
+        val activity = FamilyActivity(title = title, category = category, slot = slot, quickOption = quickOption, notes = notes)
+        db.familyActivityDao().insert(activity)
+        familyActivitySync.push(activity)
+    }
 
-    suspend fun updateFamilyActivity(id: Long, title: String, category: ActivityCategory, slot: ActivitySlot, quickOption: Boolean = false, notes: String? = null) =
-        db.familyActivityDao().update(FamilyActivity(id = id, title = title, category = category, slot = slot, quickOption = quickOption, notes = notes))
+    suspend fun updateFamilyActivity(id: String, title: String, category: ActivityCategory, slot: ActivitySlot, quickOption: Boolean = false, notes: String? = null) {
+        val activity = FamilyActivity(id = id, title = title, category = category, slot = slot, quickOption = quickOption, notes = notes)
+        db.familyActivityDao().update(activity)
+        familyActivitySync.push(activity)
+    }
 
-    suspend fun deleteFamilyActivity(id: Long) = db.familyActivityDao().delete(id)
+    suspend fun deleteFamilyActivity(id: String) {
+        db.familyActivityDao().delete(id)
+        familyActivitySync.delete(id)
+    }
 
-    fun observeActivityIdeas(activityId: Long): Flow<List<ActivityIdea>> = db.activityIdeaDao().observeForActivity(activityId)
-    suspend fun addActivityIdea(activityId: Long, text: String) = db.activityIdeaDao().insert(ActivityIdea(activityId = activityId, text = text))
+    fun observeActivityIdeas(activityId: String): Flow<List<ActivityIdea>> = db.activityIdeaDao().observeForActivity(activityId)
+    suspend fun addActivityIdea(activityId: String, text: String) = db.activityIdeaDao().insert(ActivityIdea(activityId = activityId, text = text))
     suspend fun deleteActivityIdea(id: Long) = db.activityIdeaDao().delete(id)
 
     // --- Parental activities ---
