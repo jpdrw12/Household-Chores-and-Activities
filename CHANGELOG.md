@@ -8,7 +8,21 @@ below).
 
 ## [Unreleased]
 
-## [0.4.0] - 2026-10-01
+## [0.5.0] - 2026-10-01
+
+### Added
+- Cross-device sync extended to the remaining local-only tables: chore completions (per-day),
+  chore subtasks and their per-assignee check state, activity ideas, and both Family/Parental
+  Activity weekly completion logs. ChorePhoto is the one deliberate holdout — its reference
+  photos are local files and would need a real upload pipeline (Firebase Storage) to sync
+  meaningfully, which is out of scope here.
+
+### Fixed
+- A chore/activity completion synced from another device could crash the app on pull if its
+  parent (chore/subtask/activity) hadn't synced locally yet — most commonly, completing one of
+  the seeded starter chores, since seeded data was never pushed to Firestore. Now skipped with a
+  warning log instead of crashing; the row is lost rather than retried, an accepted gap of this
+  sync pass.
 
 ### Added
 - Cross-device sync extended to For Us / Parental Activities (same pattern as Assignees/Chores/
@@ -57,7 +71,8 @@ sequencing a day's tasks, a Scheduled tab for planned-ahead For Us activities, a
 with monthly completion stats and an assignee editor, light/dark/system theming, and daily chore
 reminders. All data local-only (Room/SQLite), no sync.
 
-[Unreleased]: https://github.com/jpdrw12/Household-Chores-and-Activities/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/jpdrw12/Household-Chores-and-Activities/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/jpdrw12/Household-Chores-and-Activities/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/jpdrw12/Household-Chores-and-Activities/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/jpdrw12/Household-Chores-and-Activities/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/jpdrw12/Household-Chores-and-Activities/compare/v0.2.0...v0.2.1
