@@ -34,6 +34,12 @@ data class Chore(
     val frequency: Frequency,
     /** Only meaningful when [frequency] is [Frequency.CUSTOM]: due every N days, counted from [createdAt]. */
     val customIntervalDays: Int? = null,
+    /** ISO day-of-week (1=Monday..7=Sunday) this is due on, when [frequency] is [Frequency.WEEKLY]
+     *  or [Frequency.TWICE_WEEKLY] (first of its two days). Null falls back to Monday — only
+     *  happens for chores created before this field existed. */
+    val dueDayOfWeek: Int? = null,
+    /** Second due day, only meaningful for [Frequency.TWICE_WEEKLY]. Null falls back to Thursday. */
+    val dueDayOfWeek2: Int? = null,
     val assigneeId: String,
     val priority: Priority = Priority.NORMAL,
     /** Optional time-of-day window ("HH:mm", 24h). When [estimatedEndTime] has passed on the due

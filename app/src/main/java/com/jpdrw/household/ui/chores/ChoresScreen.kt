@@ -157,8 +157,8 @@ fun ChoresScreen(repository: Repository) {
             assignees = assignees,
             initial = null,
             onDismiss = { showAddDialog = false },
-            onConfirm = { chTitle, frequency, interval, assigneeId, priority, startTime, endTime, notes ->
-                scope.launch { repository.addChore(chTitle, frequency, interval, assigneeId, priority, startTime, endTime, notes) }
+            onConfirm = { chTitle, frequency, interval, assigneeId, priority, startTime, endTime, notes, dueDay, dueDay2 ->
+                scope.launch { repository.addChore(chTitle, frequency, interval, assigneeId, priority, startTime, endTime, notes, dueDay, dueDay2) }
                 showAddDialog = false
             },
         )
@@ -170,8 +170,8 @@ fun ChoresScreen(repository: Repository) {
             assignees = assignees,
             initial = chore,
             onDismiss = { editingChore = null },
-            onConfirm = { chTitle, frequency, interval, assigneeId, priority, startTime, endTime, notes ->
-                scope.launch { repository.updateChore(chore.id, chTitle, frequency, interval, assigneeId, priority, startTime, endTime, notes) }
+            onConfirm = { chTitle, frequency, interval, assigneeId, priority, startTime, endTime, notes, dueDay, dueDay2 ->
+                scope.launch { repository.updateChore(chore.id, chTitle, frequency, interval, assigneeId, priority, startTime, endTime, notes, dueDay, dueDay2) }
                 editingChore = null
             },
         )
@@ -478,10 +478,14 @@ private fun AddSubtaskRow(onAdd: (String) -> Unit) {
     }
 }
 
+private fun dayAbbrev(isoDay: Int): String = when (isoDay) {
+    1 -> "Mon"; 2 -> "Tue"; 3 -> "Wed"; 4 -> "Thu"; 5 -> "Fri"; 6 -> "Sat"; else -> "Sun"
+}
+
 private fun Chore.frequencyLabel(): String = when (frequency) {
     Frequency.DAILY -> "Daily"
-    Frequency.WEEKLY -> "Weekly"
-    Frequency.TWICE_WEEKLY -> "2x / week"
+    Frequency.WEEKLY -> "Weekly · ${dayAbbrev(dueDayOfWeek ?: 1)}"
+    Frequency.TWICE_WEEKLY -> "2x / week · ${dayAbbrev(dueDayOfWeek ?: 1)}/${dayAbbrev(dueDayOfWeek2 ?: 4)}"
     Frequency.CUSTOM -> "Every ${customIntervalDays ?: 1} day(s)"
 }
 
@@ -499,7 +503,18 @@ private fun ChoreDialog(
     assignees: List<Assignee>,
     initial: Chore?,
     onDismiss: () -> Unit,
-    onConfirm: (title: String, frequency: Frequency, customIntervalDays: Int?, assigneeId: String, priority: Priority, startTime: String?, estimatedEndTime: String?, notes: String?) -> Unit,
+    onConfirm: (
+        title: String,
+        frequency: Frequency,
+        customIntervalDays: Int?,
+        assigneeId: String,
+        priority: Priority,
+        startTime: String?,
+        estimatedEndTime: String?,
+        notes: String?,
+        dueDayOfWeek: Int?,
+        dueDayOfWeek2: Int?,
+    ) -> Unit,
 ) {
     var choreTitle by remember { mutableStateOf(initial?.title ?: "") }
     var frequency by remember { mutableStateOf(initial?.frequency ?: Frequency.WEEKLY) }
@@ -510,6 +525,10 @@ private fun ChoreDialog(
     var assigneeId by remember {
         mutableStateOf(initial?.assigneeId ?: assignees.firstOrNull { it.isDefault }?.id ?: assignees.firstOrNull()?.id ?: "")
     }
+    // New chores default the due day(s) to today/Monday+Thursday so a freshly added chore shows
+    // up right away instead of waiting for an arbitrary day the user never picked.
+    var dueDayOfWeek by remember { mutableStateOf(initial?.dueDayOfWeek ?: LocalDate.now().dayOfWeek.value) }
+    var dueDayOfWeek2 by remember { mutableStateOf(initial?.dueDayOfWeek2 ?: java.time.DayOfWeek.THURSDAY.value) }
     var frequencyMenuExpanded by remember { mutableStateOf(false) }
 
     AlertDialog(
@@ -541,6 +560,17 @@ private fun ChoreDialog(
                         onValueChange = { intervalText = it.filter { c -> c.isDigit() } },
                         label = { Text("Every how many days?") },
                     )
+                }
+
+                if (frequency == Frequency.WEEKLY) {
+                    Text("Due day", style = MaterialTheme.typography.labelLarge)
+                    DayOfWeekPicker(selected = dueDayOfWeek, onSelect = { dueDayOfWeek = it })
+                }
+                if (frequency == Frequency.TWICE_WEEKLY) {
+                    Text("First due day", style = MaterialTheme.typography.labelLarge)
+                    DayOfWeekPicker(selected = dueDayOfWeek, onSelect = { dueDayOfWeek = it })
+                    Text("Second due day", style = MaterialTheme.typography.labelLarge)
+                    DayOfWeekPicker(selected = dueDayOfWeek2, onSelect = { dueDayOfWeek2 = it })
                 }
 
                 Text("Priority", style = MaterialTheme.typography.labelLarge)
@@ -599,12 +629,35 @@ private fun ChoreDialog(
                         startTime,
                         estimatedEndTime,
                         initial?.notes,
+                        if (frequency == Frequency.WEEKLY || frequency == Frequency.TWICE_WEEKLY) dueDayOfWeek else null,
+                        if (frequency == Frequency.TWICE_WEEKLY) dueDayOfWeek2 else null,
                     )
                 },
             ) { Text(if (initial == null) "Add" else "Save") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
     )
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun DayOfWeekPicker(selected: Int, onSelect: (Int) -> Unit) {
+    val days = listOf(
+        1 to "Mon", 2 to "Tue", 3 to "Wed", 4 to "Thu", 5 to "Fri", 6 to "Sat", 7 to "Sun",
+    )
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        days.forEach { (value, label) ->
+            AssistChip(
+                onClick = { onSelect(value) },
+                label = { Text(label) },
+                colors = if (value == selected) {
+                    AssistChipDefaults.assistChipColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+                } else {
+                    AssistChipDefaults.assistChipColors()
+                },
+            )
+        }
+    }
 }
 
 private fun Frequency.label(): String = when (this) {

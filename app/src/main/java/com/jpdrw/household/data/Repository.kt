@@ -262,8 +262,10 @@ class Repository(private val db: AppDatabase) {
 
     private fun isDueOnRaw(chore: Chore, day: LocalDate): Boolean = when (chore.frequency) {
         Frequency.DAILY -> true
-        Frequency.WEEKLY -> day.dayOfWeek == java.time.DayOfWeek.MONDAY
-        Frequency.TWICE_WEEKLY -> day.dayOfWeek == java.time.DayOfWeek.MONDAY || day.dayOfWeek == java.time.DayOfWeek.THURSDAY
+        Frequency.WEEKLY -> day.dayOfWeek.value == (chore.dueDayOfWeek ?: java.time.DayOfWeek.MONDAY.value)
+        Frequency.TWICE_WEEKLY ->
+            day.dayOfWeek.value == (chore.dueDayOfWeek ?: java.time.DayOfWeek.MONDAY.value) ||
+                day.dayOfWeek.value == (chore.dueDayOfWeek2 ?: java.time.DayOfWeek.THURSDAY.value)
         Frequency.CUSTOM -> {
             val interval = chore.customIntervalDays
             val createdDay = java.time.Instant.ofEpochMilli(chore.createdAt).atZone(java.time.ZoneId.systemDefault()).toLocalDate()
@@ -272,13 +274,20 @@ class Repository(private val db: AppDatabase) {
         }
     }
 
-    /** Walks backward from [date] (bounded by [MAX_OVERDUE_LOOKBACK_DAYS]) to find the chore's last scheduled due date. */
+    /**
+     * Walks backward from [date] (bounded by [MAX_OVERDUE_LOOKBACK_DAYS]) to find the chore's last
+     * scheduled due date. Always treats the chore's creation day as a valid due date even if its
+     * cycle wouldn't otherwise land there (e.g. a Weekly chore created on a Thursday is only "due"
+     * on Mondays by [isDueOnRaw]) — otherwise a freshly added chore can have no due date at all
+     * until its first real cycle date arrives, making it invisible anywhere in the app right after
+     * being added.
+     */
     private fun lastScheduledDateOnOrBefore(chore: Chore, date: LocalDate): LocalDate? {
         val createdDay = java.time.Instant.ofEpochMilli(chore.createdAt).atZone(java.time.ZoneId.systemDefault()).toLocalDate()
         var day = date
         repeat(MAX_OVERDUE_LOOKBACK_DAYS + 1) {
             if (day.isBefore(createdDay)) return null
-            if (isDueOnRaw(chore, day)) return day
+            if (isDueOnRaw(chore, day) || day == createdDay) return day
             day = day.minusDays(1)
         }
         return null
@@ -293,11 +302,15 @@ class Repository(private val db: AppDatabase) {
         startTime: String? = null,
         estimatedEndTime: String? = null,
         notes: String? = null,
+        dueDayOfWeek: Int? = null,
+        dueDayOfWeek2: Int? = null,
     ) {
         val chore = Chore(
             title = title,
             frequency = frequency,
             customIntervalDays = customIntervalDays,
+            dueDayOfWeek = dueDayOfWeek,
+            dueDayOfWeek2 = dueDayOfWeek2,
             assigneeId = assigneeId,
             priority = priority,
             startTime = startTime,
@@ -318,12 +331,16 @@ class Repository(private val db: AppDatabase) {
         startTime: String? = null,
         estimatedEndTime: String? = null,
         notes: String? = null,
+        dueDayOfWeek: Int? = null,
+        dueDayOfWeek2: Int? = null,
     ) {
         val existing = db.choreDao().findById(choreId) ?: return
         val updated = existing.copy(
             title = title,
             frequency = frequency,
             customIntervalDays = customIntervalDays,
+            dueDayOfWeek = dueDayOfWeek,
+            dueDayOfWeek2 = dueDayOfWeek2,
             assigneeId = assigneeId,
             priority = priority,
             startTime = startTime,
