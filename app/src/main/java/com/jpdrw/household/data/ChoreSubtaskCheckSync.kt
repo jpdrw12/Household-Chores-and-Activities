@@ -11,13 +11,12 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
 private const val TAG = "ChoreSubtaskCheckSync"
-private const val CHECKS_PATH = "households/default-household/chore_subtask_checks"
 
 /** Syncs per-assignee, per-day subtask check state. Presence-only (row existing = checked), same
  *  reasoning as [ChoreSubtaskCheck.id]'s doc comment — deterministic id, so a re-check offline on
  *  two devices just re-writes the same doc instead of racing. */
-class ChoreSubtaskCheckSync(private val subtaskDao: ChoreSubtaskDao) {
-    private val collection by lazy { FirebaseFirestore.getInstance().collection(CHECKS_PATH) }
+class ChoreSubtaskCheckSync(private val subtaskDao: ChoreSubtaskDao, householdId: String) {
+    private val collection = FirebaseFirestore.getInstance().collection("households/$householdId/chore_subtask_checks")
     private var listener: ListenerRegistration? = null
 
     fun start(scope: CoroutineScope) {

@@ -11,7 +11,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
 private const val TAG = "ChoreOccurrenceSync"
-private const val OCCURRENCES_PATH = "households/default-household/chore_occurrences"
 
 /**
  * Syncs per-day chore completion state. Unlike the template entities (Assignee/Chore/...), this
@@ -25,8 +24,8 @@ private const val OCCURRENCES_PATH = "households/default-household/chore_occurre
  * the choreId foreign key and crash the whole sync coroutine. Caught and skipped instead; it's
  * lost rather than retried, which is an accepted gap of this sync pass (see CHANGELOG).
  */
-class ChoreOccurrenceSync(private val choreDao: ChoreDao) {
-    private val collection by lazy { FirebaseFirestore.getInstance().collection(OCCURRENCES_PATH) }
+class ChoreOccurrenceSync(private val choreDao: ChoreDao, householdId: String) {
+    private val collection = FirebaseFirestore.getInstance().collection("households/$householdId/chore_occurrences")
     private var listener: ListenerRegistration? = null
 
     fun start(scope: CoroutineScope) {

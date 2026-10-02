@@ -36,9 +36,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import com.jpdrw.household.BuildConfig
 import com.jpdrw.household.data.AppPrefs
+import com.jpdrw.household.data.HouseholdId
 import com.jpdrw.household.data.MonthlyStats
 import com.jpdrw.household.data.Repository
 import com.jpdrw.household.data.ThemeMode
@@ -61,6 +63,10 @@ fun StatsScreen(repository: Repository, appPrefs: AppPrefs) {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     var updateState by remember { mutableStateOf<UpdateState>(UpdateState.Idle) }
+    var householdCode by remember { mutableStateOf(HouseholdId.getOrCreate(context)) }
+    var joinCodeInput by remember { mutableStateOf("") }
+    var showJoinDialog by remember { mutableStateOf(false) }
+    val clipboard = LocalClipboardManager.current
 
     LaunchedEffect(Unit) {
         stats = repository.monthlyStats()
@@ -89,6 +95,28 @@ fun StatsScreen(repository: Repository, appPrefs: AppPrefs) {
                     current.byAssignee.forEach { stat ->
                         StatCard(title = stat.assigneeName, value = "${stat.completed} completed", progress = null)
                     }
+                }
+            }
+
+            Text("Household", style = androidx.compose.material3.MaterialTheme.typography.titleMedium)
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        "Only devices using this exact code see each other's data. Share it with " +
+                            "the other devices in your household; don't share it anywhere public.",
+                        style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
+                    )
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
+                            householdCode,
+                            style = androidx.compose.material3.MaterialTheme.typography.headlineSmall,
+                            modifier = Modifier.weight(1f),
+                        )
+                        TextButton(onClick = { clipboard.setText(androidx.compose.ui.text.AnnotatedString(householdCode)) }) {
+                            Text("Copy")
+                        }
+                    }
+                    TextButton(onClick = { showJoinDialog = true }) { Text("Join a different household") }
                 }
             }
 
@@ -211,6 +239,41 @@ fun StatsScreen(repository: Repository, appPrefs: AppPrefs) {
                 }) { Text("Delete") }
             },
             dismissButton = { TextButton(onClick = { deletingAssignee = null }) { Text("Cancel") } },
+        )
+    }
+
+    if (showJoinDialog) {
+        AlertDialog(
+            onDismissRequest = { showJoinDialog = false },
+            title = { Text("Join a household") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        "Enter the code shown on another device's Admin tab. This device will " +
+                            "switch to that household's data — close and reopen the app afterward " +
+                            "for it to take effect.",
+                        style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
+                    )
+                    OutlinedTextField(
+                        value = joinCodeInput,
+                        onValueChange = { joinCodeInput = it },
+                        label = { Text("Household code") },
+                        singleLine = true,
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    enabled = joinCodeInput.isNotBlank(),
+                    onClick = {
+                        HouseholdId.join(context, joinCodeInput)
+                        householdCode = HouseholdId.getOrCreate(context)
+                        joinCodeInput = ""
+                        showJoinDialog = false
+                    },
+                ) { Text("Join") }
+            },
+            dismissButton = { TextButton(onClick = { showJoinDialog = false }) { Text("Cancel") } },
         )
     }
 }

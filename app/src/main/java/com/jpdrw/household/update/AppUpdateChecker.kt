@@ -55,7 +55,12 @@ object AppUpdateChecker {
             }
             val code = connection.responseCode
             if (code != 200) {
-                return@withContext UpdateCheckResult.Error("GitHub API returned HTTP $code")
+                val message = if (code == 404) {
+                    "Couldn't reach the update server. Check your connection and try again."
+                } else {
+                    "Update check failed (HTTP $code). Try again later."
+                }
+                return@withContext UpdateCheckResult.Error(message)
             }
             val body = connection.inputStream.bufferedReader().use { it.readText() }
             val json = JSONObject(body)

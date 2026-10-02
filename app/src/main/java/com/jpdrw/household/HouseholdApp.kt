@@ -8,6 +8,7 @@ import com.google.firebase.auth.FirebaseAuth
 import com.jpdrw.household.data.AppDatabase
 import com.jpdrw.household.data.Repository
 import com.jpdrw.household.data.AppPrefs
+import com.jpdrw.household.data.HouseholdId
 import com.jpdrw.household.data.seedIfEmpty
 import com.jpdrw.household.reminders.ChoreReminderWorker
 import kotlinx.coroutines.CoroutineScope
@@ -24,7 +25,7 @@ private val REMINDER_TIME: LocalTime = LocalTime.of(18, 0)
 class HouseholdApp : Application() {
     private val applicationScope = CoroutineScope(SupervisorJob())
     val database by lazy { AppDatabase.get(this) }
-    val repository by lazy { Repository(database) }
+    val repository by lazy { Repository(database, HouseholdId.getOrCreate(this)) }
     val appPrefs by lazy { AppPrefs(this) }
 
     override fun onCreate() {
@@ -35,9 +36,9 @@ class HouseholdApp : Application() {
         signInAndStartSync()
     }
 
-    /** Anonymous auth is enough for the proof-of-concept sync — it only needs *a* signed-in user
-     *  for Firestore's default security rules, not a real identity yet (see AssigneeSync.kt for
-     *  why that's a known limitation, not an oversight). Failure here (offline, no
+    /** Anonymous auth is enough for this sync design — Firestore rules just need *a* signed-in
+     *  user, not a real identity; the actual household boundary is the household code itself (see
+     *  HouseholdId.kt and AssigneeSync's doc comment). Failure here (offline, no
      *  google-services.json, Firebase unreachable) is swallowed: the app is local-first, so it
      *  must keep working against Room with sync simply not running until this succeeds. */
     private fun signInAndStartSync() {

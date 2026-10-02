@@ -11,12 +11,11 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
 private const val TAG = "ParentalActivityLogSync"
-private const val LOGS_PATH = "households/default-household/parental_activity_logs"
 
 /** Syncs per-ISO-week parental-activity completion state. Deterministic id ("activityId|isoWeek"
  *  — see [ParentalActivityLog.id]'s doc comment), same reasoning as ChoreOccurrenceSync. */
-class ParentalActivityLogSync(private val activityDao: ParentalActivityDao) {
-    private val collection by lazy { FirebaseFirestore.getInstance().collection(LOGS_PATH) }
+class ParentalActivityLogSync(private val activityDao: ParentalActivityDao, householdId: String) {
+    private val collection = FirebaseFirestore.getInstance().collection("households/$householdId/parental_activity_logs")
     private var listener: ListenerRegistration? = null
 
     fun start(scope: CoroutineScope) {

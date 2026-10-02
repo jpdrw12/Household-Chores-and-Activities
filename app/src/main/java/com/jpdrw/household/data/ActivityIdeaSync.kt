@@ -11,12 +11,11 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
 private const val TAG = "ActivityIdeaSync"
-private const val IDEAS_PATH = "households/default-household/activity_ideas"
 
 /** Syncs activity-idea suggestions (e.g. "Build a castle" under "Building blocks / Lego"). Same
  *  shape as ChoreSubtaskSync. */
-class ActivityIdeaSync(private val ideaDao: ActivityIdeaDao) {
-    private val collection by lazy { FirebaseFirestore.getInstance().collection(IDEAS_PATH) }
+class ActivityIdeaSync(private val ideaDao: ActivityIdeaDao, householdId: String) {
+    private val collection = FirebaseFirestore.getInstance().collection("households/$householdId/activity_ideas")
     private var listener: ListenerRegistration? = null
 
     fun start(scope: CoroutineScope) {

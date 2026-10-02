@@ -13,18 +13,14 @@ import kotlinx.coroutines.launch
 
 private const val TAG = "FamilyActivitySync"
 
-/** Same fixed, unauthenticated household path as AssigneeSync/ChoreSync — see AssigneeSync's doc
- *  comment for why this isn't safe for multiple real households yet. */
-private const val ACTIVITIES_PATH = "households/default-household/family_activities"
-
 /**
  * Third entity rolled onto the Firestore sync pattern (see AssigneeSync/ChoreSync for the first
  * two) — same shape: Room stays the source of truth for local reads, Firestore is a sync
  * transport, writes are fire-and-forget. Syncs the activity itself only, not activity_ideas or
  * family_activity_logs (same as how ChoreSync leaves occurrences/photos/subtasks local-only).
  */
-class FamilyActivitySync(private val activityDao: FamilyActivityDao) {
-    private val collection by lazy { FirebaseFirestore.getInstance().collection(ACTIVITIES_PATH) }
+class FamilyActivitySync(private val activityDao: FamilyActivityDao, householdId: String) {
+    private val collection = FirebaseFirestore.getInstance().collection("households/$householdId/family_activities")
     private var listener: ListenerRegistration? = null
 
     fun start(scope: CoroutineScope) {

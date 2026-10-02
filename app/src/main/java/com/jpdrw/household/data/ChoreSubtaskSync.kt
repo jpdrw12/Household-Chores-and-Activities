@@ -11,13 +11,12 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
 private const val TAG = "ChoreSubtaskSync"
-private const val SUBTASKS_PATH = "households/default-household/chore_subtasks"
 
 /** Syncs chore subtask definitions (e.g. "Shirts" under "Put clothes away") — same shape as
  *  ActivityIdeaSync. Does NOT sync chore_subtask_checks (per-day, per-assignee completion state —
  *  see ChoreSubtaskCheckSync.kt for that). */
-class ChoreSubtaskSync(private val subtaskDao: ChoreSubtaskDao) {
-    private val collection by lazy { FirebaseFirestore.getInstance().collection(SUBTASKS_PATH) }
+class ChoreSubtaskSync(private val subtaskDao: ChoreSubtaskDao, householdId: String) {
+    private val collection = FirebaseFirestore.getInstance().collection("households/$householdId/chore_subtasks")
     private var listener: ListenerRegistration? = null
 
     fun start(scope: CoroutineScope) {

@@ -13,10 +13,6 @@ import kotlinx.coroutines.launch
 
 private const val TAG = "ParentalActivitySync"
 
-/** Same fixed, unauthenticated household path as AssigneeSync/ChoreSync/FamilyActivitySync — see
- *  AssigneeSync's doc comment for why this isn't safe for multiple real households yet. */
-private const val ACTIVITIES_PATH = "households/default-household/parental_activities"
-
 /**
  * Fourth entity rolled onto the Firestore sync pattern (see AssigneeSync/ChoreSync/
  * FamilyActivitySync for the first three) — same shape: Room stays the source of truth for local
@@ -24,8 +20,8 @@ private const val ACTIVITIES_PATH = "households/default-household/parental_activ
  * only, not parental_activity_logs (weekly completion state stays local-only, same as how
  * ChoreSync/FamilyActivitySync leave their own log/occurrence tables local-only).
  */
-class ParentalActivitySync(private val activityDao: ParentalActivityDao) {
-    private val collection by lazy { FirebaseFirestore.getInstance().collection(ACTIVITIES_PATH) }
+class ParentalActivitySync(private val activityDao: ParentalActivityDao, householdId: String) {
+    private val collection = FirebaseFirestore.getInstance().collection("households/$householdId/parental_activities")
     private var listener: ListenerRegistration? = null
 
     fun start(scope: CoroutineScope) {

@@ -8,6 +8,22 @@ below).
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-10-02
+
+### Fixed
+- **Security:** every install of the app previously synced through a single hardcoded Firestore
+  path shared by all users, combined with anonymous auth — meaning anyone who installed the app
+  could read and write every household's data. Each install now generates its own short household
+  code on first launch (shown on the Admin tab, with a "Join a different household" option to
+  switch to someone else's code), and every synced collection is scoped under
+  `households/<code>/...`. This is a shared-secret style boundary, not full per-user
+  authentication — anyone who has the code can still join that household, which is the point: it's
+  meant to be shared between your own devices.
+- The GitHub repo was private, so the in-app update checker's unauthenticated API call always got
+  HTTP 404 regardless of whether a release existed. Made the repo public (no secrets were ever
+  committed — signing keys and `google-services.json` are injected by CI from GitHub secrets) and
+  gave the update checker a clearer message instead of a raw status code.
+
 ## [0.6.1] - 2026-10-02
 
 ### Fixed

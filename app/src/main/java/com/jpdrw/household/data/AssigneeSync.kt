@@ -11,11 +11,6 @@ import kotlinx.coroutines.launch
 
 private const val TAG = "AssigneeSync"
 
-/** Every household currently shares this one fixed Firestore path — there's no auth/household-
- *  join flow yet, so this is NOT safe for multiple unrelated households using the app. It only
- *  exists to validate the sync mechanism end to end before building that out for every entity. */
-private const val ASSIGNEES_PATH = "households/default-household/assignees"
-
 /**
  * Proof-of-concept cross-device sync for Assignee, the one entity being migrated first (see the
  * architecture discussion that led here). Firestore is purely a sync transport — Room stays the
@@ -23,9 +18,15 @@ private const val ASSIGNEES_PATH = "households/default-household/assignees"
  * the Long-to-String id swap. A Firestore write is fire-and-forget: if it fails (offline, Firebase
  * unreachable), Room already has the change locally and the retry happens naturally on the next
  * successful [push], so nothing is lost — it just doesn't sync until connectivity returns.
+ *
+ * [householdId] scopes every path under "households/$householdId/..." — see HouseholdId.kt for
+ * where it comes from (a short per-install code, generated locally, shared by typing it into
+ * another device). This is what actually separates one household's data from another's; it
+ * replaced an earlier version of this class that hardcoded a single path every install shared,
+ * which meant literally any install of the app could read and write everyone's data.
  */
-class AssigneeSync(private val assigneeDao: AssigneeDao) {
-    private val collection by lazy { FirebaseFirestore.getInstance().collection(ASSIGNEES_PATH) }
+class AssigneeSync(private val assigneeDao: AssigneeDao, householdId: String) {
+    private val collection = FirebaseFirestore.getInstance().collection("households/$householdId/assignees")
     private var listener: ListenerRegistration? = null
 
     /** Starts a live listener that upserts/removes rows in Room's `assignees` table to match

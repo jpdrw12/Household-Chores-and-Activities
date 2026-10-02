@@ -13,10 +13,6 @@ import kotlinx.coroutines.launch
 
 private const val TAG = "ChoreSync"
 
-/** Same fixed, unauthenticated household path as AssigneeSync — see its doc comment for why this
- *  isn't safe for multiple real households yet. */
-private const val CHORES_PATH = "households/default-household/chores"
-
 /**
  * Second entity rolled onto the Firestore sync pattern proven out by AssigneeSync — same shape:
  * Room stays the source of truth for local reads, Firestore is a sync transport, writes are
@@ -26,8 +22,8 @@ private const val CHORES_PATH = "households/default-household/chores"
  * (day-by-day completion state), chore_photos, or chore_subtasks. Those stay local-only for now;
  * syncing them is the same pattern again, just not done yet.
  */
-class ChoreSync(private val choreDao: ChoreDao) {
-    private val collection by lazy { FirebaseFirestore.getInstance().collection(CHORES_PATH) }
+class ChoreSync(private val choreDao: ChoreDao, householdId: String) {
+    private val collection = FirebaseFirestore.getInstance().collection("households/$householdId/chores")
     private var listener: ListenerRegistration? = null
 
     fun start(scope: CoroutineScope) {

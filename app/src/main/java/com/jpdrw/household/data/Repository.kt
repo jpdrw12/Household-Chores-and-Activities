@@ -79,18 +79,20 @@ data class MonthlyStats(
 
 private const val MAX_OVERDUE_LOOKBACK_DAYS = 60
 
-/** Single access point for screens: joins Room tables and fills in "for today" rows on the fly. */
-class Repository(private val db: AppDatabase) {
-    private val assigneeSync = AssigneeSync(db.assigneeDao())
-    private val choreSync = ChoreSync(db.choreDao())
-    private val familyActivitySync = FamilyActivitySync(db.familyActivityDao())
-    private val parentalActivitySync = ParentalActivitySync(db.parentalActivityDao())
-    private val choreOccurrenceSync = ChoreOccurrenceSync(db.choreDao())
-    private val choreSubtaskSync = ChoreSubtaskSync(db.choreSubtaskDao())
-    private val choreSubtaskCheckSync = ChoreSubtaskCheckSync(db.choreSubtaskDao())
-    private val activityIdeaSync = ActivityIdeaSync(db.activityIdeaDao())
-    private val familyActivityLogSync = FamilyActivityLogSync(db.familyActivityDao())
-    private val parentalActivityLogSync = ParentalActivityLogSync(db.parentalActivityDao())
+/** Single access point for screens: joins Room tables and fills in "for today" rows on the fly.
+ *  [householdId] (see HouseholdId.kt) scopes every synced collection to this household alone —
+ *  passed in from HouseholdApp, which resolves it once at startup before constructing this. */
+class Repository(private val db: AppDatabase, householdId: String) {
+    private val assigneeSync = AssigneeSync(db.assigneeDao(), householdId)
+    private val choreSync = ChoreSync(db.choreDao(), householdId)
+    private val familyActivitySync = FamilyActivitySync(db.familyActivityDao(), householdId)
+    private val parentalActivitySync = ParentalActivitySync(db.parentalActivityDao(), householdId)
+    private val choreOccurrenceSync = ChoreOccurrenceSync(db.choreDao(), householdId)
+    private val choreSubtaskSync = ChoreSubtaskSync(db.choreSubtaskDao(), householdId)
+    private val choreSubtaskCheckSync = ChoreSubtaskCheckSync(db.choreSubtaskDao(), householdId)
+    private val activityIdeaSync = ActivityIdeaSync(db.activityIdeaDao(), householdId)
+    private val familyActivityLogSync = FamilyActivityLogSync(db.familyActivityDao(), householdId)
+    private val parentalActivityLogSync = ParentalActivityLogSync(db.parentalActivityDao(), householdId)
 
     /** Starts mirroring every synced Firestore collection into Room. Call once, after sign-in,
      *  from HouseholdApp — see each XxxSync class's own doc comment for the design. ChorePhoto is
