@@ -66,6 +66,7 @@ fun StatsScreen(repository: Repository, appPrefs: AppPrefs) {
     var householdCode by remember { mutableStateOf(HouseholdId.getOrCreate(context)) }
     var joinCodeInput by remember { mutableStateOf("") }
     var showJoinDialog by remember { mutableStateOf(false) }
+    var resyncState by remember { mutableStateOf<ResyncState>(ResyncState.Idle) }
     val clipboard = LocalClipboardManager.current
 
     LaunchedEffect(Unit) {
@@ -117,6 +118,34 @@ fun StatsScreen(repository: Repository, appPrefs: AppPrefs) {
                         }
                     }
                     TextButton(onClick = { showJoinDialog = true }) { Text("Join a different household") }
+                    Text(
+                        "If you just joined this code (or this device had data before household codes " +
+                            "existed), push everything this device has so the other devices can see it.",
+                        style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
+                    )
+                    TextButton(
+                        enabled = resyncState !is ResyncState.Syncing,
+                        onClick = {
+                            resyncState = ResyncState.Syncing
+                            scope.launch {
+                                resyncState = try {
+                                    repository.resyncAll()
+                                    ResyncState.Done
+                                } catch (e: Exception) {
+                                    ResyncState.Error(e.message ?: "Resync failed")
+                                }
+                            }
+                        },
+                    ) {
+                        Text(
+                            when (resyncState) {
+                                is ResyncState.Syncing -> "Pushing…"
+                                is ResyncState.Done -> "Pushed ✓"
+                                is ResyncState.Error -> "Push failed, tap to retry"
+                                ResyncState.Idle -> "Push all data to this household"
+                            },
+                        )
+                    }
                 }
             }
 
@@ -282,6 +311,13 @@ private fun ThemeMode.label(): String = when (this) {
     ThemeMode.SYSTEM -> "System"
     ThemeMode.LIGHT -> "Light"
     ThemeMode.DARK -> "Dark"
+}
+
+private sealed class ResyncState {
+    data object Idle : ResyncState()
+    data object Syncing : ResyncState()
+    data object Done : ResyncState()
+    data class Error(val message: String) : ResyncState()
 }
 
 private sealed class UpdateState {

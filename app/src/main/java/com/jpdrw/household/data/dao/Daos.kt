@@ -28,6 +28,9 @@ interface AssigneeDao {
     @Query("SELECT * FROM assignees ORDER BY isDefault DESC, name ASC")
     fun observeAll(): Flow<List<Assignee>>
 
+    @Query("SELECT * FROM assignees")
+    suspend fun listAll(): List<Assignee>
+
     @Query("SELECT * FROM assignees WHERE id = :id LIMIT 1")
     suspend fun findById(id: String): Assignee?
 
@@ -66,6 +69,12 @@ interface PlanDao {
 interface ChoreDao {
     @Query("SELECT * FROM chores WHERE active = 1 ORDER BY title ASC")
     fun observeActive(): Flow<List<Chore>>
+
+    @Query("SELECT * FROM chores")
+    suspend fun listAll(): List<Chore>
+
+    @Query("SELECT * FROM chore_occurrences")
+    suspend fun listAllOccurrences(): List<ChoreOccurrence>
 
     @Query("SELECT * FROM chores WHERE id = :choreId LIMIT 1")
     suspend fun findById(choreId: String): Chore?
@@ -138,6 +147,12 @@ interface ChoreSubtaskDao {
     @Query("SELECT * FROM chore_subtasks WHERE choreId = :choreId ORDER BY sortOrder ASC, id ASC")
     fun observeForChore(choreId: String): Flow<List<ChoreSubtask>>
 
+    @Query("SELECT * FROM chore_subtasks")
+    suspend fun listAll(): List<ChoreSubtask>
+
+    @Query("SELECT * FROM chore_subtask_checks")
+    suspend fun listAllChecks(): List<ChoreSubtaskCheck>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(subtask: ChoreSubtask)
 
@@ -161,6 +176,12 @@ interface ChoreSubtaskDao {
 interface FamilyActivityDao {
     @Query("SELECT * FROM family_activities WHERE active = 1 ORDER BY title ASC")
     fun observeActive(): Flow<List<FamilyActivity>>
+
+    @Query("SELECT * FROM family_activities")
+    suspend fun listAll(): List<FamilyActivity>
+
+    @Query("SELECT * FROM family_activity_logs")
+    suspend fun listAllLogs(): List<FamilyActivityLog>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(activity: FamilyActivity)
@@ -198,6 +219,9 @@ interface ActivityIdeaDao {
     @Query("SELECT * FROM activity_ideas WHERE activityId = :activityId ORDER BY sortOrder ASC, id ASC")
     suspend fun listForActivity(activityId: String): List<ActivityIdea>
 
+    @Query("SELECT * FROM activity_ideas")
+    suspend fun listAll(): List<ActivityIdea>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(idea: ActivityIdea)
 
@@ -209,6 +233,12 @@ interface ActivityIdeaDao {
 interface ParentalActivityDao {
     @Query("SELECT * FROM parental_activities WHERE active = 1 ORDER BY title ASC")
     fun observeActive(): Flow<List<ParentalActivity>>
+
+    @Query("SELECT * FROM parental_activities")
+    suspend fun listAll(): List<ParentalActivity>
+
+    @Query("SELECT * FROM parental_activity_logs")
+    suspend fun listAllLogs(): List<ParentalActivityLog>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(activity: ParentalActivity)

@@ -574,4 +574,26 @@ class Repository(private val db: AppDatabase, householdId: String) {
         val all = db.choreDao().observeActive().first().associateBy { it.id }
         return incomplete.mapNotNull { all[it.choreId]?.title }
     }
+
+    /**
+     * Pushes every row currently in Room to Firestore under this device's current household code,
+     * regardless of whether it's been pushed before. Joining a household only starts a *listener*
+     * on that household's path (see AssigneeSync's doc comment) — it doesn't retroactively send
+     * this device's existing data anywhere, so data created before a join (or before this device
+     * had a household code at all) is otherwise invisible to anyone else under that code until
+     * this runs once. Safe to call repeatedly: every push is a plain upsert keyed by the row's own
+     * id, so re-sending unchanged rows is a no-op overwrite, not a duplicate.
+     */
+    suspend fun resyncAll() {
+        db.assigneeDao().listAll().forEach { assigneeSync.push(it) }
+        db.choreDao().listAll().forEach { choreSync.push(it) }
+        db.choreDao().listAllOccurrences().forEach { choreOccurrenceSync.push(it) }
+        db.choreSubtaskDao().listAll().forEach { choreSubtaskSync.push(it) }
+        db.choreSubtaskDao().listAllChecks().forEach { choreSubtaskCheckSync.push(it) }
+        db.familyActivityDao().listAll().forEach { familyActivitySync.push(it) }
+        db.familyActivityDao().listAllLogs().forEach { familyActivityLogSync.push(it) }
+        db.activityIdeaDao().listAll().forEach { activityIdeaSync.push(it) }
+        db.parentalActivityDao().listAll().forEach { parentalActivitySync.push(it) }
+        db.parentalActivityDao().listAllLogs().forEach { parentalActivityLogSync.push(it) }
+    }
 }

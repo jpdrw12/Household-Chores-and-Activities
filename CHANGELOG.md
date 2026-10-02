@@ -8,6 +8,15 @@ below).
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-10-02
+
+### Added
+- "Push all data to this household" button on the Admin tab. Joining a household code only starts
+  a listener on that code's Firestore path — it never retroactively sent a device's existing local
+  data anywhere, so data created before a join (or before household codes existed at all) was
+  invisible to anyone else under that code. This pushes every row currently in Room once, which is
+  what actually gets two devices to converge after a join.
+
 ## [0.7.0] - 2026-10-02
 
 ### Fixed
