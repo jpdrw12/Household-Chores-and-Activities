@@ -29,6 +29,7 @@ import com.jpdrw.household.data.entity.ParentalActivity
 import com.jpdrw.household.data.entity.ParentalAudience
 import com.jpdrw.household.data.entity.PlanEntry
 import kotlinx.coroutines.flow.first
+import java.util.UUID
 
 @Database(
     entities = [
@@ -49,7 +50,7 @@ import kotlinx.coroutines.flow.first
     // below). Room only takes the destructive-migration path when the version number itself
     // changes — leaving it the same while the schema drifts hits a hard identity-hash crash on
     // any device with an existing install, instead of a clean wipe-and-reseed.
-    version = 14,
+    version = 15,
     exportSchema = false,
 )
 @TypeConverters(Converters::class)
@@ -83,6 +84,19 @@ abstract class AppDatabase : RoomDatabase() {
 }
 
 /**
+ * Deterministic id for a seeded row, derived from a stable string key (e.g. "chore:Sweep") rather
+ * than random — every device seeding the same starter data independently lands on the exact same
+ * id with zero network coordination. This is what makes seeded data's completions/checks/logs
+ * actually sync correctly: a ChoreOccurrence completed on one device references this chore's id,
+ * and since every other device seeded that same chore under the same id, the FK resolves locally
+ * on pull instead of being silently dropped (see ChoreOccurrenceSync's doc comment). Before this,
+ * each device generated its own random id per seeded row, so only user-added data (which gets a
+ * single canonical id via Firestore) ever synced correctly — completing a starter chore on one
+ * device was invisible everywhere else.
+ */
+private fun seedId(key: String): String = UUID.nameUUIDFromBytes(key.toByteArray()).toString()
+
+/**
  * Seeds starter data, inserting only titles that don't already exist. Called from HouseholdApp on
  * every launch rather than from a RoomDatabase.Callback.onCreate — that callback does not reliably
  * fire after a destructive migration recreates tables (only guaranteed on a brand-new database
@@ -93,7 +107,7 @@ abstract class AppDatabase : RoomDatabase() {
 suspend fun AppDatabase.seedIfEmpty() {
     val assigneeDao = assigneeDao()
     val familyId = assigneeDao.observeAll().first().firstOrNull { it.isDefault }?.id
-        ?: Assignee(name = "Family", isDefault = true).also { assigneeDao.insert(it) }.id
+        ?: Assignee(id = seedId("assignee:Family"), name = "Family", isDefault = true).also { assigneeDao.insert(it) }.id
 
     val choreDao = choreDao()
     val existingChoreTitles = choreDao.observeActive().first().map { it.title }.toSet()
@@ -112,7 +126,7 @@ suspend fun AppDatabase.seedIfEmpty() {
         "Pack lunch bags" to Frequency.DAILY,
     )
     starterChores.filter { it.first !in existingChoreTitles }.forEach { (title, freq) ->
-        choreDao.insert(Chore(title = title, frequency = freq, assigneeId = familyId))
+        choreDao.insert(Chore(id = seedId("chore:$title"), title = title, frequency = freq, assigneeId = familyId))
     }
 
     // "Put clothes away" subtasks are per family member, not per clothing item, so everyone can
@@ -127,7 +141,14 @@ suspend fun AppDatabase.seedIfEmpty() {
         val existingSubtaskTitles = existingSubtasks.map { it.title }.toSet()
         personNames.forEachIndexed { index, name ->
             if (name !in existingSubtaskTitles) {
-                subtaskDao.insert(ChoreSubtask(choreId = putClothesAwayChore.id, title = name, sortOrder = index))
+                subtaskDao.insert(
+                    ChoreSubtask(
+                        id = seedId("chore_subtask:${putClothesAwayChore.id}:$name"),
+                        choreId = putClothesAwayChore.id,
+                        title = name,
+                        sortOrder = index,
+                    ),
+                )
             }
         }
     }
@@ -154,7 +175,7 @@ suspend fun AppDatabase.seedIfEmpty() {
         StarterActivity("Bedtime story", ActivityCategory.INDOOR, ActivitySlot.BEDTIME),
     )
     starterActivities.filter { it.title !in existingActivityTitles }.forEach { (title, cat, slot, quick) ->
-        activityDao.insert(FamilyActivity(title = title, category = cat, slot = slot, quickOption = quick))
+        activityDao.insert(FamilyActivity(id = seedId("family_activity:$title"), title = title, category = cat, slot = slot, quickOption = quick))
     }
 
     // Idea suggestions for open-ended creative activities — "what should we make?" prompts, not a
@@ -191,7 +212,9 @@ suspend fun AppDatabase.seedIfEmpty() {
         val existingIdeaTexts = ideaDao.listForActivity(activity.id).map { it.text }.toSet()
         ideas.forEachIndexed { index, idea ->
             if (idea !in existingIdeaTexts) {
-                ideaDao.insert(ActivityIdea(activityId = activity.id, text = idea, sortOrder = index))
+                ideaDao.insert(
+                    ActivityIdea(id = seedId("activity_idea:${activity.id}:$idea"), activityId = activity.id, text = idea, sortOrder = index),
+                )
             }
         }
     }
@@ -220,7 +243,7 @@ suspend fun AppDatabase.seedIfEmpty() {
         Triple("Amusement park", ParentalAudience.FAMILY, BudgetTier.HIGH),
     )
     starterParental.filter { it.first !in existingParentalTitles }.forEach { (title, audience, budget) ->
-        parentalDao.insert(ParentalActivity(title = title, audience = audience, budget = budget))
+        parentalDao.insert(ParentalActivity(id = seedId("parental_activity:$title"), title = title, audience = audience, budget = budget))
     }
 
     // "Intimate" suggestions stay deliberately non-explicit — romantic/sensual framing rather than
@@ -241,6 +264,6 @@ suspend fun AppDatabase.seedIfEmpty() {
         Triple("Book a couples massage or spa night", ParentalAudience.TOGETHER, BudgetTier.HIGH),
     )
     starterIntimate.filter { it.first !in existingParentalTitles }.forEach { (title, audience, budget) ->
-        parentalDao.insert(ParentalActivity(title = title, audience = audience, budget = budget, isSpicy = true))
+        parentalDao.insert(ParentalActivity(id = seedId("parental_activity:$title"), title = title, audience = audience, budget = budget, isSpicy = true))
     }
 }
