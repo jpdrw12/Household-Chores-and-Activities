@@ -101,7 +101,16 @@ object AppUpdateChecker {
         return false
     }
 
+    /**
+     * Always downloads to the same fixed [DOWNLOAD_FILE_NAME] so [promptInstall] knows where to
+     * find it. If that file is still there from a previous update (e.g. updating twice in a row
+     * without the file ever getting cleaned up), DownloadManager can leave it untouched rather than
+     * overwriting it — the new download silently lands somewhere else and the installer reinstalls
+     * the stale APK, which looks like a successful update but leaves the version unchanged. Delete
+     * it first so every download starts from a clean destination.
+     */
     fun startDownload(context: Context, info: UpdateInfo): Long {
+        File(context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), DOWNLOAD_FILE_NAME).delete()
         val manager = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
         val request = DownloadManager.Request(Uri.parse(info.downloadUrl))
             .setTitle("Household Tracker ${info.tagName}")

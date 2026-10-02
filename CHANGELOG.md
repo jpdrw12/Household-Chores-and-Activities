@@ -8,6 +8,16 @@ below).
 
 ## [Unreleased]
 
+## [0.8.1] - 2026-10-02
+
+### Fixed
+- The self-updater always downloaded to the same fixed file path. If that file was still there
+  from a previous update (updating twice in a row, which is exactly what testing v0.7.0 then
+  v0.8.0 back-to-back did), DownloadManager could leave it untouched instead of overwriting it —
+  the new APK silently landed somewhere else and the installer reinstalled the stale one. The
+  system install flow completes normally either way, so this looked like a successful update while
+  the app stayed on the old version. Now deletes any leftover file before starting each download.
+
 ## [0.8.0] - 2026-10-02
 
 ### Added
