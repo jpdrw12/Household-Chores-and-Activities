@@ -18,15 +18,18 @@ Native Android app (Kotlin + Jetpack Compose + Room) for family chores and activ
   as "Suggested now". On weekday mornings, the start-up suggestions narrow to quick, low-prep
   options that fit a tight pre-school window (a full walk or bike ride only surfaces on
   weekends).
-- **For the Parents** — weekly personal / together / adult-only activity suggestions,
-  filterable by low/medium/high budget. An admin-gated "Intimate" category (solo and together
-  suggestions) stays hidden until switched on in Admin · Stats — off by default.
+- **For Us** — weekly personal / together / adult-only / family activity suggestions,
+  filterable by low/medium/high budget, with a date-navigable **Day Roadmap (Mapper)** tab for
+  sequencing a day's chores/activities/For Us items, and a **Scheduled** tab for anything given a
+  target date. A per-session "💞 Intimate" filter reveals intimate suggestions (off by default).
 - **Admin · Stats** — a separate tab (not part of daily flow) showing monthly chore
   completion rate and activity counts, all computed from local data, plus the appearance
-  theme toggle and the intimate-content toggle.
+  theme toggle and the assignee editor.
 
-All data is stored locally in a Room/SQLite database on-device. No account, no server,
-no cloud sync.
+All data is stored locally in a Room/SQLite database on-device — no account needed to use the
+app. Assignees and chores additionally sync across devices via Firebase Firestore, a proof of
+concept (see [Cross-device sync](#cross-device-sync) below); every other entity is still
+local-only.
 
 ## Getting started
 
@@ -37,7 +40,25 @@ the Gradle wrapper is checked in and works standalone:
 ./gradlew assembleDebug
 ```
 
-Minimum SDK 26, target/compile SDK 34, JDK 17.
+Minimum SDK 24, target/compile SDK 34, JDK 17.
+
+## Cross-device sync
+
+Assignees and chores sync across devices via Firebase Firestore; this is a proof of concept, not
+a finished feature — see `CHANGELOG.md` for what's synced and what isn't, and the known
+limitations (a single shared, unauthenticated Firestore path — fine for one private household
+testing this, not for shipping to strangers).
+
+To build and run with sync working:
+1. Create a Firebase project at [console.firebase.google.com](https://console.firebase.google.com)
+   (free Spark plan) and register an Android app with package name `com.jpdrw.household`.
+2. Download `google-services.json` and place it at `app/google-services.json` (gitignored —
+   per-developer config, never commit a real one).
+3. In the Firebase console, enable **Authentication → Anonymous** sign-in and create a
+   **Firestore Database** (test mode is fine for a single-household proof of concept).
+
+Without this file, the app still works fully offline — Firebase calls fail silently and the app
+falls back to local-only Room storage.
 
 ## Project structure
 
@@ -54,41 +75,20 @@ app/src/main/java/com/jpdrw/household/
   MainActivity.kt   Hosts the Compose nav graph
 ```
 
-## Since v0.1
+## Versioning & changelog
 
-- Daily reminder notification (6pm, via WorkManager) listing any chores still unchecked
-  for the day. Requests `POST_NOTIFICATIONS` on first launch (Android 13+).
-- Chores support multiple reference photos (picked from the device gallery), shown as a
-  thumbnail strip in the collapsible photo section, each removable individually.
-- Admin · Stats now breaks chore completion down by assignee for the current month.
-- Chores and both activity lists support edit and delete from the list UI (pencil/trash
-  icons), not just add.
-- Chore frequency adds a "Custom" option: due every N days from creation date, for
-  schedules that don't fit daily/weekly/2x-weekly.
-- Admin · Stats has a Light/Dark/System appearance toggle, stored via DataStore, applied
-  app-wide independent of the OS setting.
-- Chores carry a priority (Low/Normal/High/Critical) and now persist as **overdue** once
-  missed, rather than only appearing on their single scheduled day; overdue and
-  High/Critical chores sort to the top of the list.
-- Admin · Stats gained a "Show intimate activities" toggle (off by default) gating a new
-  intimate-suggestion category in "For Us", seeded with a few tasteful starter ideas under
-  Personal and Together.
-- Chores support an optional start time + estimated end time; past the end time on the due
-  date, an otherwise on-time chore is marked overdue same-day.
-- Family activity suggestions can be flagged "quick" — on weekday mornings the Start-up slot
-  only shows those, so school-morning suggestions stay realistic for the time available.
-- Fixed a hard crash on launch after a schema change on an existing install (Room's identity
-  hash check requires the database version to be bumped alongside any entity/column change —
-  `version` is now 2, with a comment flagging this for future changes). Also replaced the
-  Room-callback-based first-run seeding, which turned out not to reliably fire after a
-  destructive-migration table recreation, with an explicit `seedIfEmpty()` check run from
-  `HouseholdApp` on every launch — self-healing regardless of how the tables ended up empty.
+See `CHANGELOG.md` for release history. `./bump-version.sh [patch|minor|major]` bumps
+`versionName`/`versionCode` in `app/build.gradle.kts`; add a matching entry to `CHANGELOG.md`
+before committing the bump. The app is pre-1.0 — a schema-changing release wipes and reseeds
+local on-device data (see the Room migration note in `AppDatabase.kt`).
 
 ## Ideas not yet built
 
 - Reminder time (currently fixed at 6pm) isn't user-configurable yet.
 - No per-photo full-screen viewer — thumbnails only.
 - No undo after deleting a chore/activity/subtask.
+- Cross-device sync (see above) only covers Assignees and Chores so far, and uses a single
+  shared, unauthenticated Firestore path rather than real per-household accounts.
 - Facial recognition for auto-selecting who's checking off a task, with a manual picker
   fallback for shared tasks — flagged as a separate future project, meaningfully larger
   scope than anything else here (on-device ML Kit/CameraX + a per-family-member enrollment
