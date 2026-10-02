@@ -8,6 +8,17 @@ below).
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-10-02
+
+### Fixed
+- Completing one of the 12 starter chores (or logging a starter family/For Us activity) didn't
+  sync to other devices, even though manually-added chores did. Cause: each device seeds its own
+  starter data independently with a random id, so "Clean counters" on one device and "Clean
+  counters" on another were different chores under the hood — a completion record pointing at
+  one device's chore id simply didn't exist on another device, and was silently dropped rather
+  than crash. Seeded rows now get a deterministic id derived from their title, so every device
+  converges on the same id for the same starter item with no network coordination needed.
+
 ## [0.6.0] - 2026-10-02
 
 ### Added
@@ -95,7 +106,8 @@ sequencing a day's tasks, a Scheduled tab for planned-ahead For Us activities, a
 with monthly completion stats and an assignee editor, light/dark/system theming, and daily chore
 reminders. All data local-only (Room/SQLite), no sync.
 
-[Unreleased]: https://github.com/jpdrw12/Household-Chores-and-Activities/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/jpdrw12/Household-Chores-and-Activities/compare/v0.6.1...HEAD
+[0.6.1]: https://github.com/jpdrw12/Household-Chores-and-Activities/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/jpdrw12/Household-Chores-and-Activities/compare/v0.5.1...v0.6.0
 [0.5.1]: https://github.com/jpdrw12/Household-Chores-and-Activities/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/jpdrw12/Household-Chores-and-Activities/compare/v0.4.0...v0.5.0
