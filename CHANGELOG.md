@@ -8,6 +8,18 @@ below).
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-10-02
+
+### Added
+- A real release pipeline: a signed, repeatable `./gradlew assembleRelease`, a GitHub Actions
+  workflow that builds and attaches a signed APK to a GitHub Release on every version tag push,
+  and `tag-release.sh` to trigger it. See `RELEASING.md` for the one-time secret setup and the
+  cut-a-release flow.
+- An in-app self-updater (no Play Store, so no Play In-App Update API): Admin · Stats has a
+  manual "Check for updates" section that polls the GitHub Releases API, downloads the signed
+  APK via `DownloadManager`, and hands it to the system installer — which still requires your
+  explicit confirmation, same as any sideloaded install.
+
 ## [0.5.1] - 2026-10-01
 
 ### Changed
@@ -83,7 +95,8 @@ sequencing a day's tasks, a Scheduled tab for planned-ahead For Us activities, a
 with monthly completion stats and an assignee editor, light/dark/system theming, and daily chore
 reminders. All data local-only (Room/SQLite), no sync.
 
-[Unreleased]: https://github.com/jpdrw12/Household-Chores-and-Activities/compare/v0.5.1...HEAD
+[Unreleased]: https://github.com/jpdrw12/Household-Chores-and-Activities/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/jpdrw12/Household-Chores-and-Activities/compare/v0.5.1...v0.6.0
 [0.5.1]: https://github.com/jpdrw12/Household-Chores-and-Activities/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/jpdrw12/Household-Chores-and-Activities/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/jpdrw12/Household-Chores-and-Activities/compare/v0.3.0...v0.4.0
