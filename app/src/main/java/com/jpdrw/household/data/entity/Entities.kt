@@ -22,10 +22,14 @@ data class Assignee(
 enum class Frequency { DAILY, WEEKLY, TWICE_WEEKLY, CUSTOM }
 enum class Priority { LOW, NORMAL, HIGH, CRITICAL }
 
-/** A chore template, e.g. "Sweep" or "Clean bathroom". */
+/** A chore template, e.g. "Sweep" or "Clean bathroom".
+ *
+ *  Id is a client-generated UUID string, same reasoning as [Assignee.id] — this entity syncs to
+ *  Firestore too (see ChoreSync.kt), and a Long autoincrement id would let two devices adding a
+ *  chore offline collide once both synced. */
 @Entity(tableName = "chores")
 data class Chore(
-    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    @PrimaryKey val id: String = UUID.randomUUID().toString(),
     val title: String,
     val frequency: Frequency,
     /** Only meaningful when [frequency] is [Frequency.CUSTOM]: due every N days, counted from [createdAt]. */
@@ -51,7 +55,7 @@ data class Chore(
 )
 data class ChorePhoto(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
-    val choreId: Long,
+    val choreId: String,
     val uri: String,
     val addedAt: Long = System.currentTimeMillis(),
 )
@@ -65,7 +69,7 @@ data class ChorePhoto(
 )
 data class ChoreSubtask(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
-    val choreId: Long,
+    val choreId: String,
     val title: String,
     val sortOrder: Int = 0,
 )
@@ -95,7 +99,7 @@ data class ChoreSubtaskCheck(
 )
 data class ChoreOccurrence(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
-    val choreId: Long,
+    val choreId: String,
     val dueDate: String, // ISO yyyy-MM-dd
     val completed: Boolean = false,
     val completedAt: Long? = null,
@@ -111,13 +115,17 @@ enum class PlanItemType { CHORE, FAMILY_ACTIVITY, PARENTAL_ACTIVITY }
 /** One task (chore, family activity, or "For Us" activity) placed into a given day's roadmap, in
  *  order. Lets a day's available tasks be strung together into a sequence on the Mapper tab,
  *  independent of completion state. No FK here since [itemId] points at a different table
- *  depending on [itemType]. */
+ *  depending on [itemType].
+ *
+ *  itemId is a String even though FamilyActivity/ParentalActivity still use Long ids (only Chore
+ *  has moved to a UUID string so far, for Firestore sync) — Repository stores a Long id's string
+ *  form here and parses it back when looking up those two tables. */
 @Entity(tableName = "plan_entries")
 data class PlanEntry(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val date: String, // ISO yyyy-MM-dd
     val itemType: PlanItemType,
-    val itemId: Long,
+    val itemId: String,
     val sortOrder: Int,
 )
 

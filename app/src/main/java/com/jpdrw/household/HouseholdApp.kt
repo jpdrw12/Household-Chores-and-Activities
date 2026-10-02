@@ -32,7 +32,7 @@ class HouseholdApp : Application() {
         ChoreReminderWorker.ensureChannel(this)
         scheduleDailyReminder()
         applicationScope.launch { database.seedIfEmpty() }
-        signInAndStartAssigneeSync()
+        signInAndStartSync()
     }
 
     /** Anonymous auth is enough for the proof-of-concept sync — it only needs *a* signed-in user
@@ -40,18 +40,18 @@ class HouseholdApp : Application() {
      *  why that's a known limitation, not an oversight). Failure here (offline, no
      *  google-services.json, Firebase unreachable) is swallowed: the app is local-first, so it
      *  must keep working against Room with sync simply not running until this succeeds. */
-    private fun signInAndStartAssigneeSync() {
+    private fun signInAndStartSync() {
         val auth = FirebaseAuth.getInstance()
         val currentUser = auth.currentUser
         if (currentUser != null) {
-            repository.startAssigneeSync(applicationScope)
+            repository.startSync(applicationScope)
             return
         }
         android.util.Log.d("HouseholdApp", "signing in anonymously...")
         auth.signInAnonymously()
             .addOnSuccessListener {
                 android.util.Log.d("HouseholdApp", "sign-in success, starting sync")
-                repository.startAssigneeSync(applicationScope)
+                repository.startSync(applicationScope)
             }
             .addOnFailureListener {
                 android.util.Log.e("HouseholdApp", "sign-in failed", it)

@@ -46,7 +46,7 @@ data class SubtaskWithChecks(
 
 data class PlanTask(
     val itemType: PlanItemType,
-    val itemId: Long,
+    val itemId: String,
     val title: String,
     val subtitle: String,
     val isSpicy: Boolean = false,
@@ -82,10 +82,14 @@ private const val MAX_OVERDUE_LOOKBACK_DAYS = 60
 /** Single access point for screens: joins Room tables and fills in "for today" rows on the fly. */
 class Repository(private val db: AppDatabase) {
     private val assigneeSync = AssigneeSync(db.assigneeDao())
+    private val choreSync = ChoreSync(db.choreDao())
 
-    /** Starts mirroring the Firestore `assignees` collection into Room. Call once, after sign-in,
-     *  from HouseholdApp — see AssigneeSync's own doc comment for the sync design. */
-    fun startAssigneeSync(scope: kotlinx.coroutines.CoroutineScope) = assigneeSync.start(scope)
+    /** Starts mirroring the Firestore `assignees`/`chores` collections into Room. Call once, after
+     *  sign-in, from HouseholdApp — see AssigneeSync/ChoreSync's own doc comments for the design. */
+    fun startSync(scope: kotlinx.coroutines.CoroutineScope) {
+        assigneeSync.start(scope)
+        choreSync.start(scope)
+    }
 
 
     // --- Assignees ---
@@ -195,8 +199,8 @@ class Repository(private val db: AppDatabase) {
             val plannedKeys = planned.map { it.itemType to it.itemId }.toSet()
             buildList {
                 chores.forEach { c -> add(PlanTask(PlanItemType.CHORE, c.chore.id, c.chore.title, c.assigneeName)) }
-                familyActs.forEach { a -> add(PlanTask(PlanItemType.FAMILY_ACTIVITY, a.id, a.title, if (a.category == ActivityCategory.INDOOR) "Indoor" else "Outdoor")) }
-                parentalActs.forEach { a -> add(PlanTask(PlanItemType.PARENTAL_ACTIVITY, a.id, a.title, audienceLabel(a.audience), isSpicy = a.isSpicy, isScheduledToday = a.scheduledDate == date)) }
+                familyActs.forEach { a -> add(PlanTask(PlanItemType.FAMILY_ACTIVITY, a.id.toString(), a.title, if (a.category == ActivityCategory.INDOOR) "Indoor" else "Outdoor")) }
+                parentalActs.forEach { a -> add(PlanTask(PlanItemType.PARENTAL_ACTIVITY, a.id.toString(), a.title, audienceLabel(a.audience), isSpicy = a.isSpicy, isScheduledToday = a.scheduledDate == date)) }
             }.filter { (it.itemType to it.itemId) !in plannedKeys }
         }
 
@@ -218,25 +222,25 @@ class Repository(private val db: AppDatabase) {
                     PlanItemType.CHORE -> choresById[entry.itemId]?.let { c ->
                         PlanTask(PlanItemType.CHORE, c.id, c.title, assigneeNames[c.assigneeId]?.name ?: "Family")
                     }
-                    PlanItemType.FAMILY_ACTIVITY -> familyById[entry.itemId]?.let { a ->
-                        PlanTask(PlanItemType.FAMILY_ACTIVITY, a.id, a.title, if (a.category == ActivityCategory.INDOOR) "Indoor" else "Outdoor")
+                    PlanItemType.FAMILY_ACTIVITY -> entry.itemId.toLongOrNull()?.let { familyById[it] }?.let { a ->
+                        PlanTask(PlanItemType.FAMILY_ACTIVITY, a.id.toString(), a.title, if (a.category == ActivityCategory.INDOOR) "Indoor" else "Outdoor")
                     }
-                    PlanItemType.PARENTAL_ACTIVITY -> parentalById[entry.itemId]?.let { a ->
-                        PlanTask(PlanItemType.PARENTAL_ACTIVITY, a.id, a.title, audienceLabel(a.audience), isSpicy = a.isSpicy, isScheduledToday = a.scheduledDate == entry.date)
+                    PlanItemType.PARENTAL_ACTIVITY -> entry.itemId.toLongOrNull()?.let { parentalById[it] }?.let { a ->
+                        PlanTask(PlanItemType.PARENTAL_ACTIVITY, a.id.toString(), a.title, audienceLabel(a.audience), isSpicy = a.isSpicy, isScheduledToday = a.scheduledDate == entry.date)
                     }
                 }
             }
         }
 
-    suspend fun addToPlan(date: String, itemType: PlanItemType, itemId: Long) {
+    suspend fun addToPlan(date: String, itemType: PlanItemType, itemId: String) {
         val dao = db.planDao()
         val nextOrder = (dao.maxSortOrder(date) ?: -1) + 1
         dao.insert(PlanEntry(date = date, itemType = itemType, itemId = itemId, sortOrder = nextOrder))
     }
 
-    suspend fun removeFromPlan(date: String, itemType: PlanItemType, itemId: Long) = db.planDao().deleteEntry(date, itemType, itemId)
+    suspend fun removeFromPlan(date: String, itemType: PlanItemType, itemId: String) = db.planDao().deleteEntry(date, itemType, itemId)
 
-    suspend fun reorderPlan(date: String, orderedItems: List<Pair<PlanItemType, Long>>) {
+    suspend fun reorderPlan(date: String, orderedItems: List<Pair<PlanItemType, String>>) {
         val dao = db.planDao()
         dao.deleteAllForDate(date)
         orderedItems.forEachIndexed { index, (itemType, itemId) ->
@@ -289,8 +293,8 @@ class Repository(private val db: AppDatabase) {
         startTime: String? = null,
         estimatedEndTime: String? = null,
         notes: String? = null,
-    ) = db.choreDao().insert(
-        Chore(
+    ) {
+        val chore = Chore(
             title = title,
             frequency = frequency,
             customIntervalDays = customIntervalDays,
@@ -299,11 +303,13 @@ class Repository(private val db: AppDatabase) {
             startTime = startTime,
             estimatedEndTime = estimatedEndTime,
             notes = notes,
-        ),
-    )
+        )
+        db.choreDao().insert(chore)
+        choreSync.push(chore)
+    }
 
     suspend fun updateChore(
-        choreId: Long,
+        choreId: String,
         title: String,
         frequency: Frequency,
         customIntervalDays: Int?,
@@ -314,22 +320,22 @@ class Repository(private val db: AppDatabase) {
         notes: String? = null,
     ) {
         val existing = db.choreDao().findById(choreId) ?: return
-        db.choreDao().update(
-            existing.copy(
-                title = title,
-                frequency = frequency,
-                customIntervalDays = customIntervalDays,
-                assigneeId = assigneeId,
-                priority = priority,
-                startTime = startTime,
-                estimatedEndTime = estimatedEndTime,
-                notes = notes,
-            ),
+        val updated = existing.copy(
+            title = title,
+            frequency = frequency,
+            customIntervalDays = customIntervalDays,
+            assigneeId = assigneeId,
+            priority = priority,
+            startTime = startTime,
+            estimatedEndTime = estimatedEndTime,
+            notes = notes,
         )
+        db.choreDao().update(updated)
+        choreSync.push(updated)
     }
 
     suspend fun setChoreCompleted(
-        choreId: Long,
+        choreId: String,
         date: String,
         completed: Boolean,
         photoUri: String?,
@@ -360,15 +366,22 @@ class Repository(private val db: AppDatabase) {
         }
     }
 
-    suspend fun retireChore(choreId: Long) = db.choreDao().deactivate(choreId)
-    suspend fun deleteChore(choreId: Long) = db.choreDao().delete(choreId)
+    suspend fun retireChore(choreId: String) {
+        db.choreDao().deactivate(choreId)
+        db.choreDao().findById(choreId)?.let { choreSync.push(it) }
+    }
 
-    fun observeChorePhotos(choreId: Long): Flow<List<ChorePhoto>> = db.chorePhotoDao().observeForChore(choreId)
-    suspend fun addChorePhoto(choreId: Long, uri: String) = db.chorePhotoDao().insert(ChorePhoto(choreId = choreId, uri = uri))
+    suspend fun deleteChore(choreId: String) {
+        db.choreDao().delete(choreId)
+        choreSync.delete(choreId)
+    }
+
+    fun observeChorePhotos(choreId: String): Flow<List<ChorePhoto>> = db.chorePhotoDao().observeForChore(choreId)
+    suspend fun addChorePhoto(choreId: String, uri: String) = db.chorePhotoDao().insert(ChorePhoto(choreId = choreId, uri = uri))
     suspend fun deleteChorePhoto(photoId: Long) = db.chorePhotoDao().delete(photoId)
 
     // --- Chore subtasks ---
-    fun observeSubtasks(choreId: Long, date: String): Flow<List<SubtaskWithChecks>> =
+    fun observeSubtasks(choreId: String, date: String): Flow<List<SubtaskWithChecks>> =
         combine(db.choreSubtaskDao().observeForChore(choreId), db.choreSubtaskDao().observeChecksForChoreAndDate(choreId, date)) { subtasks, checks ->
             val checksBySubtask = checks.groupBy { it.subtaskId }
             subtasks.map { subtask ->
@@ -376,7 +389,7 @@ class Repository(private val db: AppDatabase) {
             }
         }
 
-    suspend fun addSubtask(choreId: Long, title: String) = db.choreSubtaskDao().insert(ChoreSubtask(choreId = choreId, title = title))
+    suspend fun addSubtask(choreId: String, title: String) = db.choreSubtaskDao().insert(ChoreSubtask(choreId = choreId, title = title))
     suspend fun deleteSubtask(subtaskId: Long) = db.choreSubtaskDao().delete(subtaskId)
 
     suspend fun setSubtaskChecked(subtaskId: Long, assigneeId: String, date: String, checked: Boolean) {

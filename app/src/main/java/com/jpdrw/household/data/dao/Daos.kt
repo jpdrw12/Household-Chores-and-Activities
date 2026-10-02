@@ -53,7 +53,7 @@ interface PlanDao {
     suspend fun insert(entry: PlanEntry): Long
 
     @Query("DELETE FROM plan_entries WHERE date = :date AND itemType = :itemType AND itemId = :itemId")
-    suspend fun deleteEntry(date: String, itemType: PlanItemType, itemId: Long)
+    suspend fun deleteEntry(date: String, itemType: PlanItemType, itemId: String)
 
     @Query("DELETE FROM plan_entries WHERE date = :date")
     suspend fun deleteAllForDate(date: String)
@@ -68,19 +68,19 @@ interface ChoreDao {
     fun observeActive(): Flow<List<Chore>>
 
     @Query("SELECT * FROM chores WHERE id = :choreId LIMIT 1")
-    suspend fun findById(choreId: Long): Chore?
+    suspend fun findById(choreId: String): Chore?
 
-    @Insert
-    suspend fun insert(chore: Chore): Long
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insert(chore: Chore)
 
     @Update
     suspend fun update(chore: Chore)
 
     @Query("UPDATE chores SET active = 0 WHERE id = :choreId")
-    suspend fun deactivate(choreId: Long)
+    suspend fun deactivate(choreId: String)
 
     @Query("DELETE FROM chores WHERE id = :choreId")
-    suspend fun delete(choreId: Long)
+    suspend fun delete(choreId: String)
 
     @Insert
     suspend fun insertOccurrence(occurrence: ChoreOccurrence): Long
@@ -98,7 +98,7 @@ interface ChoreDao {
     suspend fun incompleteForDate(date: String): List<ChoreOccurrence>
 
     @Query("SELECT * FROM chore_occurrences WHERE choreId = :choreId AND dueDate = :date LIMIT 1")
-    suspend fun findOccurrence(choreId: Long, date: String): ChoreOccurrence?
+    suspend fun findOccurrence(choreId: String, date: String): ChoreOccurrence?
 
     @Query("SELECT COUNT(*) FROM chore_occurrences WHERE dueDate BETWEEN :start AND :end AND completed = 1")
     suspend fun completedCountBetween(start: String, end: String): Int
@@ -121,7 +121,7 @@ interface ChoreDao {
 @Dao
 interface ChorePhotoDao {
     @Query("SELECT * FROM chore_photos WHERE choreId = :choreId ORDER BY addedAt ASC")
-    fun observeForChore(choreId: Long): Flow<List<ChorePhoto>>
+    fun observeForChore(choreId: String): Flow<List<ChorePhoto>>
 
     @Insert
     suspend fun insert(photo: ChorePhoto): Long
@@ -133,7 +133,7 @@ interface ChorePhotoDao {
 @Dao
 interface ChoreSubtaskDao {
     @Query("SELECT * FROM chore_subtasks WHERE choreId = :choreId ORDER BY sortOrder ASC, id ASC")
-    fun observeForChore(choreId: Long): Flow<List<ChoreSubtask>>
+    fun observeForChore(choreId: String): Flow<List<ChoreSubtask>>
 
     @Insert
     suspend fun insert(subtask: ChoreSubtask): Long
@@ -142,7 +142,7 @@ interface ChoreSubtaskDao {
     suspend fun delete(subtaskId: Long)
 
     @Query("SELECT * FROM chore_subtask_checks WHERE date = :date AND subtaskId IN (SELECT id FROM chore_subtasks WHERE choreId = :choreId)")
-    fun observeChecksForChoreAndDate(choreId: Long, date: String): Flow<List<ChoreSubtaskCheck>>
+    fun observeChecksForChoreAndDate(choreId: String, date: String): Flow<List<ChoreSubtaskCheck>>
 
     @Query("SELECT * FROM chore_subtask_checks WHERE subtaskId = :subtaskId AND assigneeId = :assigneeId AND date = :date LIMIT 1")
     suspend fun findCheck(subtaskId: Long, assigneeId: String, date: String): ChoreSubtaskCheck?
