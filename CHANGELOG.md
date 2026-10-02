@@ -8,19 +8,6 @@ below).
 
 ## [Unreleased]
 
-## [0.6.0] - 2026-10-01
-
-### Added
-- Chore reference photos now sync across devices via Firebase Storage (image) + Firestore
-  (metadata) — the last entity on the sync pattern. **Requires enabling Storage in the Firebase
-  console** (Build → Storage → Get started) on top of the Auth/Firestore setup from 0.2.0 — until
-  then, photos stay local-only exactly like before, with no crash or error shown to the user.
-
-All eleven synced entities (Assignees, Chores, Family/Parental Activities, chore completions,
-chore subtasks + checks, activity ideas, both activity logs, and now chore photos) share the same
-proof-of-concept limitation: a single shared, unauthenticated Firestore/Storage path, fine for one
-private household testing this, not for shipping to other users.
-
 ## [0.5.0] - 2026-10-01
 
 ### Added
@@ -84,8 +71,7 @@ sequencing a day's tasks, a Scheduled tab for planned-ahead For Us activities, a
 with monthly completion stats and an assignee editor, light/dark/system theming, and daily chore
 reminders. All data local-only (Room/SQLite), no sync.
 
-[Unreleased]: https://github.com/jpdrw12/Household-Chores-and-Activities/compare/v0.6.0...HEAD
-[0.6.0]: https://github.com/jpdrw12/Household-Chores-and-Activities/compare/v0.5.0...v0.6.0
+[Unreleased]: https://github.com/jpdrw12/Household-Chores-and-Activities/compare/v0.5.0...HEAD
 [0.5.0]: https://github.com/jpdrw12/Household-Chores-and-Activities/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/jpdrw12/Household-Chores-and-Activities/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/jpdrw12/Household-Chores-and-Activities/compare/v0.2.1...v0.3.0
