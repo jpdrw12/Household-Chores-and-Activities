@@ -53,9 +53,14 @@ data class Chore(
 )
 
 /** A reference photo attached to a chore showing what "done" should look like. A chore can have
- *  several. Deliberately NOT synced — [uri] is a local file:// path from the camera/gallery picker
- *  that wouldn't resolve on another device without a real photo-upload pipeline (Firebase
- *  Storage), which is out of scope for this sync pass. */
+ *  several.
+ *
+ *  Id is a client-generated UUID string, same reasoning as every other synced entity. [uri] is
+ *  the local content:// path from the camera/gallery picker — fast to show on the device that
+ *  added it, but meaningless on any other device. [remoteUrl] is the Firebase Storage download
+ *  URL, set once the background upload (see ChorePhotoSync.kt) completes; null until then, and
+ *  always null for a photo pulled in from another device (which never had the local file to begin
+ *  with). The UI should always prefer `remoteUrl ?: uri` when deciding what to display. */
 @Entity(
     tableName = "chore_photos",
     foreignKeys = [
@@ -63,9 +68,10 @@ data class Chore(
     ],
 )
 data class ChorePhoto(
-    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    @PrimaryKey val id: String = UUID.randomUUID().toString(),
     val choreId: String,
     val uri: String,
+    val remoteUrl: String? = null,
     val addedAt: Long = System.currentTimeMillis(),
 )
 

@@ -232,7 +232,7 @@ private fun ChoreCard(
             runCatching {
                 context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
-            scope.launch { repository.addChorePhoto(item.chore.id, uri.toString()) }
+            scope.launch { addAndUploadPhoto(repository, item.chore.id, uri, context) }
         }
     }
 
@@ -240,7 +240,7 @@ private fun ChoreCard(
     val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { success ->
         val uri = pendingCameraUri
         if (success && uri != null) {
-            scope.launch { repository.addChorePhoto(item.chore.id, uri.toString()) }
+            scope.launch { addAndUploadPhoto(repository, item.chore.id, uri, context) }
         }
         pendingCameraUri = null
     }
@@ -341,7 +341,7 @@ private fun ChoreCard(
                     } else {
                         LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(bottom = 8.dp)) {
                             items(photos, key = { it.id }) { photo ->
-                                PhotoThumbnail(photo = photo, onDelete = { scope.launch { repository.deleteChorePhoto(photo.id) } })
+                                PhotoThumbnail(photo = photo, onDelete = { scope.launch { repository.deleteChorePhoto(photo) } })
                             }
                         }
                     }
@@ -411,11 +411,22 @@ private fun createChorePhotoUri(context: android.content.Context): android.net.U
     return FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
 }
 
+/** Inserts the local row (so the thumbnail shows immediately), then reads the picked/captured
+ *  image's bytes and kicks off the background upload. Reading bytes needs a ContentResolver, so
+ *  this has to live in the UI layer rather than Repository — see Repository.addChorePhoto's doc
+ *  comment. A read failure (permission revoked, file gone) just means the photo stays local-only;
+ *  it already shows fine via its own `uri`. */
+private suspend fun addAndUploadPhoto(repository: Repository, choreId: String, uri: android.net.Uri, context: android.content.Context) {
+    val photo = repository.addChorePhoto(choreId, uri.toString())
+    val bytes = runCatching { context.contentResolver.openInputStream(uri)?.use { it.readBytes() } }.getOrNull()
+    if (bytes != null) repository.uploadChorePhoto(photo, bytes)
+}
+
 @Composable
 private fun PhotoThumbnail(photo: ChorePhoto, onDelete: () -> Unit) {
     androidx.compose.foundation.layout.Box(modifier = Modifier.size(72.dp)) {
         AsyncImage(
-            model = photo.uri,
+            model = photo.remoteUrl ?: photo.uri,
             contentDescription = null,
             contentScale = ContentScale.Crop,
             modifier = Modifier.fillMaxSize(),
