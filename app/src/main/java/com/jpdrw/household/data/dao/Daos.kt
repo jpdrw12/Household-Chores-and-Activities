@@ -82,11 +82,14 @@ interface ChoreDao {
     @Query("DELETE FROM chores WHERE id = :choreId")
     suspend fun delete(choreId: String)
 
-    @Insert
-    suspend fun insertOccurrence(occurrence: ChoreOccurrence): Long
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertOccurrence(occurrence: ChoreOccurrence)
 
     @Update
     suspend fun updateOccurrence(occurrence: ChoreOccurrence)
+
+    @Query("DELETE FROM chore_occurrences WHERE id = :id")
+    suspend fun deleteOccurrence(id: String)
 
     @Query("SELECT * FROM chore_occurrences WHERE dueDate = :date ORDER BY id ASC")
     fun observeOccurrencesForDate(date: String): Flow<List<ChoreOccurrence>>
@@ -135,23 +138,23 @@ interface ChoreSubtaskDao {
     @Query("SELECT * FROM chore_subtasks WHERE choreId = :choreId ORDER BY sortOrder ASC, id ASC")
     fun observeForChore(choreId: String): Flow<List<ChoreSubtask>>
 
-    @Insert
-    suspend fun insert(subtask: ChoreSubtask): Long
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insert(subtask: ChoreSubtask)
 
     @Query("DELETE FROM chore_subtasks WHERE id = :subtaskId")
-    suspend fun delete(subtaskId: Long)
+    suspend fun delete(subtaskId: String)
 
     @Query("SELECT * FROM chore_subtask_checks WHERE date = :date AND subtaskId IN (SELECT id FROM chore_subtasks WHERE choreId = :choreId)")
     fun observeChecksForChoreAndDate(choreId: String, date: String): Flow<List<ChoreSubtaskCheck>>
 
     @Query("SELECT * FROM chore_subtask_checks WHERE subtaskId = :subtaskId AND assigneeId = :assigneeId AND date = :date LIMIT 1")
-    suspend fun findCheck(subtaskId: Long, assigneeId: String, date: String): ChoreSubtaskCheck?
+    suspend fun findCheck(subtaskId: String, assigneeId: String, date: String): ChoreSubtaskCheck?
 
-    @Insert
-    suspend fun insertCheck(check: ChoreSubtaskCheck): Long
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertCheck(check: ChoreSubtaskCheck)
 
     @Query("DELETE FROM chore_subtask_checks WHERE id = :checkId")
-    suspend fun deleteCheck(checkId: Long)
+    suspend fun deleteCheck(checkId: String)
 }
 
 @Dao
@@ -180,6 +183,9 @@ interface FamilyActivityDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertLog(log: FamilyActivityLog)
 
+    @Query("DELETE FROM family_activity_logs WHERE id = :id")
+    suspend fun deleteLog(id: String)
+
     @Query("SELECT COUNT(*) FROM family_activity_logs WHERE date BETWEEN :start AND :end AND done = 1")
     suspend fun doneCountBetween(start: String, end: String): Int
 }
@@ -192,11 +198,11 @@ interface ActivityIdeaDao {
     @Query("SELECT * FROM activity_ideas WHERE activityId = :activityId ORDER BY sortOrder ASC, id ASC")
     suspend fun listForActivity(activityId: String): List<ActivityIdea>
 
-    @Insert
-    suspend fun insert(idea: ActivityIdea): Long
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insert(idea: ActivityIdea)
 
     @Query("DELETE FROM activity_ideas WHERE id = :id")
-    suspend fun delete(id: Long)
+    suspend fun delete(id: String)
 }
 
 @Dao
@@ -227,6 +233,9 @@ interface ParentalActivityDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertLog(log: ParentalActivityLog)
+
+    @Query("DELETE FROM parental_activity_logs WHERE id = :id")
+    suspend fun deleteLog(id: String)
 
     @Query("SELECT COUNT(*) FROM parental_activity_logs WHERE isoWeek = :isoWeek AND done = 1")
     suspend fun doneCountForWeek(isoWeek: String): Int

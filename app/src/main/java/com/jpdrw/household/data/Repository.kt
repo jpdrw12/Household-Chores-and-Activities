@@ -85,15 +85,27 @@ class Repository(private val db: AppDatabase) {
     private val choreSync = ChoreSync(db.choreDao())
     private val familyActivitySync = FamilyActivitySync(db.familyActivityDao())
     private val parentalActivitySync = ParentalActivitySync(db.parentalActivityDao())
+    private val choreOccurrenceSync = ChoreOccurrenceSync(db.choreDao())
+    private val choreSubtaskSync = ChoreSubtaskSync(db.choreSubtaskDao())
+    private val choreSubtaskCheckSync = ChoreSubtaskCheckSync(db.choreSubtaskDao())
+    private val activityIdeaSync = ActivityIdeaSync(db.activityIdeaDao())
+    private val familyActivityLogSync = FamilyActivityLogSync(db.familyActivityDao())
+    private val parentalActivityLogSync = ParentalActivityLogSync(db.parentalActivityDao())
 
-    /** Starts mirroring the Firestore `assignees`/`chores`/`family_activities`/
-     *  `parental_activities` collections into Room. Call once, after sign-in, from HouseholdApp —
-     *  see each XxxSync class's own doc comment for the design. */
+    /** Starts mirroring every synced Firestore collection into Room. Call once, after sign-in,
+     *  from HouseholdApp — see each XxxSync class's own doc comment for the design. ChorePhoto is
+     *  the one entity NOT synced (local file:// URIs, see its own doc comment). */
     fun startSync(scope: kotlinx.coroutines.CoroutineScope) {
         assigneeSync.start(scope)
         choreSync.start(scope)
         familyActivitySync.start(scope)
         parentalActivitySync.start(scope)
+        choreOccurrenceSync.start(scope)
+        choreSubtaskSync.start(scope)
+        choreSubtaskCheckSync.start(scope)
+        activityIdeaSync.start(scope)
+        familyActivityLogSync.start(scope)
+        parentalActivityLogSync.start(scope)
     }
 
 
@@ -365,27 +377,14 @@ class Repository(private val db: AppDatabase) {
     ) {
         val dao = db.choreDao()
         val existing = dao.findOccurrence(choreId, date)
-        if (existing != null) {
-            dao.updateOccurrence(
-                existing.copy(
-                    completed = completed,
-                    completedAt = if (completed) System.currentTimeMillis() else null,
-                    completedPhotoUri = photoUri ?: existing.completedPhotoUri,
-                    completedByAssigneeId = if (completed) completedByAssigneeId else null,
-                ),
-            )
-        } else {
-            dao.insertOccurrence(
-                ChoreOccurrence(
-                    choreId = choreId,
-                    dueDate = date,
-                    completed = completed,
-                    completedAt = if (completed) System.currentTimeMillis() else null,
-                    completedPhotoUri = photoUri,
-                    completedByAssigneeId = if (completed) completedByAssigneeId else null,
-                ),
-            )
-        }
+        val occurrence = (existing ?: ChoreOccurrence(id = "$choreId|$date", choreId = choreId, dueDate = date)).copy(
+            completed = completed,
+            completedAt = if (completed) System.currentTimeMillis() else null,
+            completedPhotoUri = photoUri ?: existing?.completedPhotoUri,
+            completedByAssigneeId = if (completed) completedByAssigneeId else null,
+        )
+        if (existing != null) dao.updateOccurrence(occurrence) else dao.insertOccurrence(occurrence)
+        choreOccurrenceSync.push(occurrence)
     }
 
     suspend fun retireChore(choreId: String) {
@@ -411,16 +410,27 @@ class Repository(private val db: AppDatabase) {
             }
         }
 
-    suspend fun addSubtask(choreId: String, title: String) = db.choreSubtaskDao().insert(ChoreSubtask(choreId = choreId, title = title))
-    suspend fun deleteSubtask(subtaskId: Long) = db.choreSubtaskDao().delete(subtaskId)
+    suspend fun addSubtask(choreId: String, title: String) {
+        val subtask = ChoreSubtask(choreId = choreId, title = title)
+        db.choreSubtaskDao().insert(subtask)
+        choreSubtaskSync.push(subtask)
+    }
 
-    suspend fun setSubtaskChecked(subtaskId: Long, assigneeId: String, date: String, checked: Boolean) {
+    suspend fun deleteSubtask(subtaskId: String) {
+        db.choreSubtaskDao().delete(subtaskId)
+        choreSubtaskSync.delete(subtaskId)
+    }
+
+    suspend fun setSubtaskChecked(subtaskId: String, assigneeId: String, date: String, checked: Boolean) {
         val dao = db.choreSubtaskDao()
-        val existing = dao.findCheck(subtaskId, assigneeId, date)
-        if (checked && existing == null) {
-            dao.insertCheck(ChoreSubtaskCheck(subtaskId = subtaskId, assigneeId = assigneeId, date = date))
-        } else if (!checked && existing != null) {
-            dao.deleteCheck(existing.id)
+        val id = "$subtaskId|$assigneeId|$date"
+        if (checked) {
+            val check = ChoreSubtaskCheck(id = id, subtaskId = subtaskId, assigneeId = assigneeId, date = date)
+            dao.insertCheck(check)
+            choreSubtaskCheckSync.push(check)
+        } else if (dao.findCheck(subtaskId, assigneeId, date) != null) {
+            dao.deleteCheck(id)
+            choreSubtaskCheckSync.delete(id)
         }
     }
 
@@ -429,10 +439,9 @@ class Repository(private val db: AppDatabase) {
     fun observeFamilyActivityLogs(date: String): Flow<List<FamilyActivityLog>> = db.familyActivityDao().observeLogsForDate(date)
 
     suspend fun setFamilyActivityDone(activityId: String, date: String, done: Boolean) {
-        val existing = db.familyActivityDao().findLog(activityId, date)
-        db.familyActivityDao().upsertLog(
-            (existing ?: FamilyActivityLog(activityId = activityId, date = date)).copy(done = done, id = existing?.id ?: 0),
-        )
+        val log = FamilyActivityLog(id = "$activityId|$date", activityId = activityId, date = date, done = done)
+        db.familyActivityDao().upsertLog(log)
+        familyActivityLogSync.push(log)
     }
 
     suspend fun addFamilyActivity(title: String, category: ActivityCategory, slot: ActivitySlot, quickOption: Boolean = false, notes: String? = null) {
@@ -453,18 +462,25 @@ class Repository(private val db: AppDatabase) {
     }
 
     fun observeActivityIdeas(activityId: String): Flow<List<ActivityIdea>> = db.activityIdeaDao().observeForActivity(activityId)
-    suspend fun addActivityIdea(activityId: String, text: String) = db.activityIdeaDao().insert(ActivityIdea(activityId = activityId, text = text))
-    suspend fun deleteActivityIdea(id: Long) = db.activityIdeaDao().delete(id)
+    suspend fun addActivityIdea(activityId: String, text: String) {
+        val idea = ActivityIdea(activityId = activityId, text = text)
+        db.activityIdeaDao().insert(idea)
+        activityIdeaSync.push(idea)
+    }
+
+    suspend fun deleteActivityIdea(id: String) {
+        db.activityIdeaDao().delete(id)
+        activityIdeaSync.delete(id)
+    }
 
     // --- Parental activities ---
     fun observeParentalActivities(): Flow<List<ParentalActivity>> = db.parentalActivityDao().observeActive()
     fun observeParentalActivityLogs(isoWeek: String): Flow<List<ParentalActivityLog>> = db.parentalActivityDao().observeLogsForWeek(isoWeek)
 
     suspend fun setParentalActivityDone(activityId: String, isoWeek: String, done: Boolean) {
-        val existing = db.parentalActivityDao().findLog(activityId, isoWeek)
-        db.parentalActivityDao().upsertLog(
-            (existing ?: ParentalActivityLog(activityId = activityId, isoWeek = isoWeek)).copy(done = done, id = existing?.id ?: 0),
-        )
+        val log = ParentalActivityLog(id = "$activityId|$isoWeek", activityId = activityId, isoWeek = isoWeek, done = done)
+        db.parentalActivityDao().upsertLog(log)
+        parentalActivityLogSync.push(log)
     }
 
     suspend fun addParentalActivity(

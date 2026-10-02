@@ -52,7 +52,10 @@ data class Chore(
     val createdAt: Long = System.currentTimeMillis(),
 )
 
-/** A reference photo attached to a chore showing what "done" should look like. A chore can have several. */
+/** A reference photo attached to a chore showing what "done" should look like. A chore can have
+ *  several. Deliberately NOT synced — [uri] is a local file:// path from the camera/gallery picker
+ *  that wouldn't resolve on another device without a real photo-upload pipeline (Firebase
+ *  Storage), which is out of scope for this sync pass. */
 @Entity(
     tableName = "chore_photos",
     foreignKeys = [
@@ -66,7 +69,11 @@ data class ChorePhoto(
     val addedAt: Long = System.currentTimeMillis(),
 )
 
-/** A sub-step of a chore, e.g. "Put away shirts" under "Put clothes away". Each is checked off per-assignee, per-day. */
+/** A sub-step of a chore, e.g. "Put away shirts" under "Put clothes away". Each is checked off
+ *  per-assignee, per-day.
+ *
+ *  Id is a client-generated UUID string, same reasoning as [Chore.id] — syncs to Firestore too
+ *  (see ChoreSubtaskSync.kt). */
 @Entity(
     tableName = "chore_subtasks",
     foreignKeys = [
@@ -74,13 +81,19 @@ data class ChorePhoto(
     ],
 )
 data class ChoreSubtask(
-    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    @PrimaryKey val id: String = UUID.randomUUID().toString(),
     val choreId: String,
     val title: String,
     val sortOrder: Int = 0,
 )
 
-/** Records that a specific assignee checked off a specific subtask on a specific day. Row presence = checked. */
+/** Records that a specific assignee checked off a specific subtask on a specific day. Row presence
+ *  = checked.
+ *
+ *  Id is deterministic ("subtaskId|assigneeId|date"), not random — this is a presence-only
+ *  table (existence = checked), so a device re-checking the same box offline just re-writes the
+ *  same Firestore doc instead of creating a duplicate once both sync. See
+ *  ChoreSubtaskCheckSync.kt. */
 @Entity(
     tableName = "chore_subtask_checks",
     foreignKeys = [
@@ -89,14 +102,21 @@ data class ChoreSubtask(
     ],
 )
 data class ChoreSubtaskCheck(
-    @PrimaryKey(autoGenerate = true) val id: Long = 0,
-    val subtaskId: Long,
+    @PrimaryKey val id: String,
+    val subtaskId: String,
     val assigneeId: String,
     val date: String, // ISO yyyy-MM-dd
     val checkedAt: Long = System.currentTimeMillis(),
 )
 
-/** One occurrence of a chore due on a specific date, with completion state. */
+/** One occurrence of a chore due on a specific date, with completion state.
+ *
+ *  Id is deterministic ("choreId|dueDate"), not random — at most one occurrence row can
+ *  meaningfully exist per chore per date, so a deterministic id makes the Firestore sync a clean
+ *  upsert instead of needing conflict resolution between two devices completing the same chore
+ *  offline on the same day. See ChoreOccurrenceSync.kt. [completedPhotoUri] is deliberately NOT
+ *  synced — it's a local file:// URI that wouldn't resolve on another device without a real
+ *  photo-upload pipeline (Firebase Storage), which is out of scope for this sync pass. */
 @Entity(
     tableName = "chore_occurrences",
     foreignKeys = [
@@ -104,7 +124,7 @@ data class ChoreSubtaskCheck(
     ],
 )
 data class ChoreOccurrence(
-    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    @PrimaryKey val id: String,
     val choreId: String,
     val dueDate: String, // ISO yyyy-MM-dd
     val completed: Boolean = false,
@@ -154,7 +174,10 @@ data class FamilyActivity(
 )
 
 /** A suggested idea for an open-ended creative activity, e.g. "Build a castle" under
- *  "Building blocks / Lego". Browsing inspiration, not a per-day checklist like chore subtasks. */
+ *  "Building blocks / Lego". Browsing inspiration, not a per-day checklist like chore subtasks.
+ *
+ *  Id is a client-generated UUID string, same reasoning as [FamilyActivity.id] — syncs to
+ *  Firestore too (see ActivityIdeaSync.kt). */
 @Entity(
     tableName = "activity_ideas",
     foreignKeys = [
@@ -162,13 +185,16 @@ data class FamilyActivity(
     ],
 )
 data class ActivityIdea(
-    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    @PrimaryKey val id: String = UUID.randomUUID().toString(),
     val activityId: String,
     val text: String,
     val sortOrder: Int = 0,
 )
 
-/** Tracks whether a given family activity was done on a given day. */
+/** Tracks whether a given family activity was done on a given day.
+ *
+ *  Id is deterministic ("activityId|date") — same reasoning as [ChoreOccurrence.id]. See
+ *  FamilyActivityLogSync.kt. */
 @Entity(
     tableName = "family_activity_logs",
     foreignKeys = [
@@ -176,7 +202,7 @@ data class ActivityIdea(
     ],
 )
 data class FamilyActivityLog(
-    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    @PrimaryKey val id: String,
     val activityId: String,
     val date: String, // ISO yyyy-MM-dd
     val done: Boolean = false,
@@ -204,7 +230,10 @@ data class ParentalActivity(
     val active: Boolean = true,
 )
 
-/** Tracks whether a parental activity was done in a given ISO week (yyyy-'W'ww). */
+/** Tracks whether a parental activity was done in a given ISO week (yyyy-'W'ww).
+ *
+ *  Id is deterministic ("activityId|isoWeek") — same reasoning as [ChoreOccurrence.id]. See
+ *  ParentalActivityLogSync.kt. */
 @Entity(
     tableName = "parental_activity_logs",
     foreignKeys = [
@@ -212,7 +241,7 @@ data class ParentalActivity(
     ],
 )
 data class ParentalActivityLog(
-    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    @PrimaryKey val id: String,
     val activityId: String,
     val isoWeek: String,
     val done: Boolean = false,
