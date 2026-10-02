@@ -1,4 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <paths xmlns:android="http://schemas.android.com/apk/res/android">
     <files-path name="task_photos" path="task_photos/" />
+    <!-- AppUpdateChecker downloads the release APK here (app-private external storage, no
+         permission needed) and needs a content:// URI over it for the install intent. -->
+    <external-files-path name="updates" path="Download/" />
 </paths>

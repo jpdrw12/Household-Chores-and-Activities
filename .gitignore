@@ -15,3 +15,8 @@ app/release/
 # Firebase config is per-developer/per-project (download your own from the Firebase console);
 # never commit a real one, since this repo may end up public.
 app/google-services.json
+
+# Release signing — never commit the real keystore or its passwords. CI reads them from GitHub
+# Actions secrets instead (see .github/workflows/release.yml and RELEASING.md).
+release.keystore.jks
+keystore.properties

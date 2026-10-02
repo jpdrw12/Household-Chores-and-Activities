@@ -2,6 +2,11 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Lets the user approve installing an update the app downloaded itself (AppUpdateChecker.kt)
+         — this app isn't Play Store distributed, so there's no other update channel. Android
+         still makes the user confirm per-install via the system installer UI either way; this
+         permission only lets that UI be triggered from inside the app. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.CAMERA" />

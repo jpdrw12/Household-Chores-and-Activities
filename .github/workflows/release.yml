@@ -1,0 +1,59 @@
+name: Release
+
+# Triggered by a version tag push (e.g. v0.6.0) — see tag-release.sh, which creates and pushes the
+# tag after a version bump is committed. Builds a signed release APK and attaches it to a GitHub
+# Release matching the tag, which is what AppUpdateChecker.kt polls from inside the app.
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      # Secrets configured once in: repo Settings → Secrets and variables → Actions.
+      # RELEASE_KEYSTORE_BASE64 is `base64 -w0 release.keystore.jks` — see RELEASING.md.
+      - name: Decode release keystore
+        run: echo "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" | base64 -d > release.keystore.jks
+
+      # GOOGLE_SERVICES_JSON is the raw contents of app/google-services.json from the Firebase
+      # console — without it, the build still succeeds but cross-device sync won't work in the
+      # released build (same graceful-degradation behavior as a missing file locally).
+      - name: Write google-services.json
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+        run: |
+          if [ -n "$GOOGLE_SERVICES_JSON" ]; then
+            echo "$GOOGLE_SERVICES_JSON" > app/google-services.json
+          else
+            echo "No GOOGLE_SERVICES_JSON secret set — building without Firebase sync."
+          fi
+
+      - name: Build signed release APK
+        env:
+          RELEASE_STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
+          RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
+          RELEASE_KEY_ALIAS: household-tracker
+        run: ./gradlew assembleRelease --no-daemon
+
+      - name: Rename APK with version tag
+        run: |
+          mkdir -p dist
+          cp app/build/outputs/apk/release/app-release.apk "dist/household-tracker-${GITHUB_REF_NAME}.apk"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.apk
+          generate_release_notes: true

@@ -36,11 +36,16 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalContext
+import com.jpdrw.household.BuildConfig
 import com.jpdrw.household.data.AppPrefs
 import com.jpdrw.household.data.MonthlyStats
 import com.jpdrw.household.data.Repository
 import com.jpdrw.household.data.ThemeMode
 import com.jpdrw.household.data.entity.Assignee
+import com.jpdrw.household.update.AppUpdateChecker
+import com.jpdrw.household.update.UpdateCheckResult
+import com.jpdrw.household.update.UpdateInfo
 import kotlinx.coroutines.launch
 
 /** Admin-only view of tracked data and app settings. Reached via the bottom nav's "Admin" tab, out of the way of daily use. */
@@ -54,6 +59,8 @@ fun StatsScreen(repository: Repository, appPrefs: AppPrefs) {
     var deletingAssignee by remember { mutableStateOf<Assignee?>(null) }
     var newAssigneeName by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+    var updateState by remember { mutableStateOf<UpdateState>(UpdateState.Idle) }
 
     LaunchedEffect(Unit) {
         stats = repository.monthlyStats()
@@ -136,8 +143,37 @@ fun StatsScreen(repository: Repository, appPrefs: AppPrefs) {
                 }
             }
 
+            Text("Updates", style = androidx.compose.material3.MaterialTheme.typography.titleMedium)
+            UpdateSection(
+                state = updateState,
+                onCheck = {
+                    updateState = UpdateState.Checking
+                    scope.launch {
+                        updateState = when (val result = AppUpdateChecker.checkForUpdate(BuildConfig.VERSION_NAME)) {
+                            is UpdateCheckResult.UpToDate -> UpdateState.UpToDate
+                            is UpdateCheckResult.Available -> UpdateState.Available(result.info)
+                            is UpdateCheckResult.Error -> UpdateState.Error(result.message)
+                        }
+                    }
+                },
+                onDownload = { info ->
+                    updateState = UpdateState.Downloading(info)
+                    scope.launch {
+                        val downloadId = AppUpdateChecker.startDownload(context, info)
+                        val succeeded = AppUpdateChecker.awaitDownload(context, downloadId)
+                        updateState = if (succeeded) {
+                            AppUpdateChecker.promptInstall(context)
+                            UpdateState.Idle
+                        } else {
+                            UpdateState.Error("Download failed")
+                        }
+                    }
+                },
+            )
+
             Text(
-                "Data is stored locally on this device. Assignees sync across devices (proof of concept); other data doesn't sync yet.",
+                "Data is stored locally on this device. Most of it also syncs across devices " +
+                    "(proof of concept) — chore reference photos are the one permanent exception.",
                 style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
             )
         }
@@ -183,6 +219,54 @@ private fun ThemeMode.label(): String = when (this) {
     ThemeMode.SYSTEM -> "System"
     ThemeMode.LIGHT -> "Light"
     ThemeMode.DARK -> "Dark"
+}
+
+private sealed class UpdateState {
+    data object Idle : UpdateState()
+    data object Checking : UpdateState()
+    data object UpToDate : UpdateState()
+    data class Available(val info: UpdateInfo) : UpdateState()
+    data class Downloading(val info: UpdateInfo) : UpdateState()
+    data class Error(val message: String) : UpdateState()
+}
+
+@Composable
+private fun UpdateSection(state: UpdateState, onCheck: () -> Unit, onDownload: (UpdateInfo) -> Unit) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Version ${BuildConfig.VERSION_NAME}", style = androidx.compose.material3.MaterialTheme.typography.bodyMedium)
+            when (state) {
+                is UpdateState.Idle -> Button(onClick = onCheck) { Text("Check for updates") }
+                is UpdateState.Checking -> {
+                    Text("Checking…", style = androidx.compose.material3.MaterialTheme.typography.bodySmall)
+                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                }
+                is UpdateState.UpToDate -> {
+                    Text("You're up to date.", style = androidx.compose.material3.MaterialTheme.typography.bodySmall)
+                    TextButton(onClick = onCheck) { Text("Check again") }
+                }
+                is UpdateState.Available -> {
+                    Text(
+                        "${state.info.tagName} is available.",
+                        style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
+                    )
+                    Button(onClick = { onDownload(state.info) }) { Text("Download & install") }
+                }
+                is UpdateState.Downloading -> {
+                    Text("Downloading ${state.info.tagName}…", style = androidx.compose.material3.MaterialTheme.typography.bodySmall)
+                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                }
+                is UpdateState.Error -> {
+                    Text(
+                        "Couldn't check: ${state.message}",
+                        style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
+                        color = androidx.compose.material3.MaterialTheme.colorScheme.error,
+                    )
+                    TextButton(onClick = onCheck) { Text("Retry") }
+                }
+            }
+        }
+    }
 }
 
 @Composable

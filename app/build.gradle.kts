@@ -1,9 +1,22 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("com.google.devtools.ksp")
     id("com.google.gms.google-services")
 }
+
+// Release signing: reads from keystore.properties locally (gitignored — see RELEASING.md for how
+// to generate one), or from RELEASE_STORE_PASSWORD/RELEASE_KEY_PASSWORD env vars in CI, which
+// decodes the keystore itself from a GitHub Actions secret into release.keystore.jks before this
+// runs (see .github/workflows/release.yml). A debug build never touches any of this.
+val keystorePropertiesFile = rootProject.file("keystore.properties")
+val keystoreProperties = Properties().apply {
+    if (keystorePropertiesFile.exists()) load(keystorePropertiesFile.inputStream())
+}
+fun signingProp(key: String, envVar: String): String? =
+    keystoreProperties.getProperty(key) ?: System.getenv(envVar)
 
 android {
     namespace = "com.jpdrw.household"
@@ -19,10 +32,29 @@ android {
         vectorDrawables { useSupportLibrary = true }
     }
 
+    signingConfigs {
+        create("release") {
+            val storeFilePath = signingProp("storeFile", "RELEASE_STORE_FILE") ?: "release.keystore.jks"
+            val storePass = signingProp("storePassword", "RELEASE_STORE_PASSWORD")
+            val keyPass = signingProp("keyPassword", "RELEASE_KEY_PASSWORD")
+            val alias = signingProp("keyAlias", "RELEASE_KEY_ALIAS") ?: "household-tracker"
+            if (storePass != null && keyPass != null && rootProject.file(storeFilePath).exists()) {
+                storeFile = rootProject.file(storeFilePath)
+                storePassword = storePass
+                keyPassword = keyPass
+                keyAlias = alias
+            }
+            // Missing any of the above (e.g. a contributor without the keystore) just means
+            // assembleRelease falls back to being unsigned instead of failing the whole build —
+            // debug builds and `./gradlew assembleDebug` are completely unaffected either way.
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            signingConfig = signingConfigs.getByName("release")
         }
     }
 
@@ -33,7 +65,10 @@ android {
     }
     kotlinOptions { jvmTarget = "17" }
 
-    buildFeatures { compose = true }
+    buildFeatures {
+        compose = true
+        buildConfig = true
+    }
     composeOptions { kotlinCompilerExtensionVersion = "1.5.14" }
 
     packaging {
@@ -68,7 +103,7 @@ dependencies {
     implementation("io.coil-kt:coil-compose:2.6.0")
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")
 
-    // Cross-device sync proof of concept (Assignee only — see AssigneeSync.kt).
+    // Cross-device sync proof of concept — see CHANGELOG.md / README.md Cross-device sync section.
     implementation(platform("com.google.firebase:firebase-bom:33.1.2"))
     implementation("com.google.firebase:firebase-auth-ktx")
     implementation("com.google.firebase:firebase-firestore-ktx")
