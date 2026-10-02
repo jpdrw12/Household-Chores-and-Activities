@@ -8,6 +8,13 @@ below).
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-01
+
+### Added
+- Cross-device sync extended to For Us / Parental Activities (same pattern as Assignees/Chores/
+  Family Activities). Weekly completion logs are still local-only. Every synced entity now uses
+  a genuine UUID id end to end — the PlanEntry id-conversion workaround from 0.2.0/0.3.0 is gone.
+
 ## [0.3.0] - 2026-10-01
 
 ### Added
@@ -50,7 +57,8 @@ sequencing a day's tasks, a Scheduled tab for planned-ahead For Us activities, a
 with monthly completion stats and an assignee editor, light/dark/system theming, and daily chore
 reminders. All data local-only (Room/SQLite), no sync.
 
-[Unreleased]: https://github.com/jpdrw12/Household-Chores-and-Activities/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/jpdrw12/Household-Chores-and-Activities/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/jpdrw12/Household-Chores-and-Activities/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/jpdrw12/Household-Chores-and-Activities/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/jpdrw12/Household-Chores-and-Activities/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/jpdrw12/Household-Chores-and-Activities/compare/v0.1.0...v0.2.0
