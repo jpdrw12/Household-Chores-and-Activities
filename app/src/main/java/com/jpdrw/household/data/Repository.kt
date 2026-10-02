@@ -84,14 +84,16 @@ class Repository(private val db: AppDatabase) {
     private val assigneeSync = AssigneeSync(db.assigneeDao())
     private val choreSync = ChoreSync(db.choreDao())
     private val familyActivitySync = FamilyActivitySync(db.familyActivityDao())
+    private val parentalActivitySync = ParentalActivitySync(db.parentalActivityDao())
 
-    /** Starts mirroring the Firestore `assignees`/`chores`/`family_activities` collections into
-     *  Room. Call once, after sign-in, from HouseholdApp — see each XxxSync class's own doc
-     *  comment for the design. */
+    /** Starts mirroring the Firestore `assignees`/`chores`/`family_activities`/
+     *  `parental_activities` collections into Room. Call once, after sign-in, from HouseholdApp —
+     *  see each XxxSync class's own doc comment for the design. */
     fun startSync(scope: kotlinx.coroutines.CoroutineScope) {
         assigneeSync.start(scope)
         choreSync.start(scope)
         familyActivitySync.start(scope)
+        parentalActivitySync.start(scope)
     }
 
 
@@ -203,7 +205,7 @@ class Repository(private val db: AppDatabase) {
             buildList {
                 chores.forEach { c -> add(PlanTask(PlanItemType.CHORE, c.chore.id, c.chore.title, c.assigneeName)) }
                 familyActs.forEach { a -> add(PlanTask(PlanItemType.FAMILY_ACTIVITY, a.id, a.title, if (a.category == ActivityCategory.INDOOR) "Indoor" else "Outdoor")) }
-                parentalActs.forEach { a -> add(PlanTask(PlanItemType.PARENTAL_ACTIVITY, a.id.toString(), a.title, audienceLabel(a.audience), isSpicy = a.isSpicy, isScheduledToday = a.scheduledDate == date)) }
+                parentalActs.forEach { a -> add(PlanTask(PlanItemType.PARENTAL_ACTIVITY, a.id, a.title, audienceLabel(a.audience), isSpicy = a.isSpicy, isScheduledToday = a.scheduledDate == date)) }
             }.filter { (it.itemType to it.itemId) !in plannedKeys }
         }
 
@@ -228,8 +230,8 @@ class Repository(private val db: AppDatabase) {
                     PlanItemType.FAMILY_ACTIVITY -> familyById[entry.itemId]?.let { a ->
                         PlanTask(PlanItemType.FAMILY_ACTIVITY, a.id, a.title, if (a.category == ActivityCategory.INDOOR) "Indoor" else "Outdoor")
                     }
-                    PlanItemType.PARENTAL_ACTIVITY -> entry.itemId.toLongOrNull()?.let { parentalById[it] }?.let { a ->
-                        PlanTask(PlanItemType.PARENTAL_ACTIVITY, a.id.toString(), a.title, audienceLabel(a.audience), isSpicy = a.isSpicy, isScheduledToday = a.scheduledDate == entry.date)
+                    PlanItemType.PARENTAL_ACTIVITY -> parentalById[entry.itemId]?.let { a ->
+                        PlanTask(PlanItemType.PARENTAL_ACTIVITY, a.id, a.title, audienceLabel(a.audience), isSpicy = a.isSpicy, isScheduledToday = a.scheduledDate == entry.date)
                     }
                 }
             }
@@ -458,7 +460,7 @@ class Repository(private val db: AppDatabase) {
     fun observeParentalActivities(): Flow<List<ParentalActivity>> = db.parentalActivityDao().observeActive()
     fun observeParentalActivityLogs(isoWeek: String): Flow<List<ParentalActivityLog>> = db.parentalActivityDao().observeLogsForWeek(isoWeek)
 
-    suspend fun setParentalActivityDone(activityId: Long, isoWeek: String, done: Boolean) {
+    suspend fun setParentalActivityDone(activityId: String, isoWeek: String, done: Boolean) {
         val existing = db.parentalActivityDao().findLog(activityId, isoWeek)
         db.parentalActivityDao().upsertLog(
             (existing ?: ParentalActivityLog(activityId = activityId, isoWeek = isoWeek)).copy(done = done, id = existing?.id ?: 0),
@@ -472,29 +474,45 @@ class Repository(private val db: AppDatabase) {
         isSpicy: Boolean = false,
         notes: String? = null,
         scheduledDate: String? = null,
-    ) = db.parentalActivityDao().insert(
-        ParentalActivity(title = title, audience = audience, budget = budget, isSpicy = isSpicy, notes = notes, scheduledDate = scheduledDate),
-    )
+    ) {
+        val activity = ParentalActivity(title = title, audience = audience, budget = budget, isSpicy = isSpicy, notes = notes, scheduledDate = scheduledDate)
+        db.parentalActivityDao().insert(activity)
+        parentalActivitySync.push(activity)
+    }
 
     suspend fun updateParentalActivity(
-        id: Long,
+        id: String,
         title: String,
         audience: ParentalAudience,
         budget: BudgetTier,
         isSpicy: Boolean = false,
         notes: String? = null,
         scheduledDate: String? = null,
-    ) = db.parentalActivityDao().update(
-        ParentalActivity(id = id, title = title, audience = audience, budget = budget, isSpicy = isSpicy, notes = notes, scheduledDate = scheduledDate),
-    )
+    ) {
+        val activity = ParentalActivity(id = id, title = title, audience = audience, budget = budget, isSpicy = isSpicy, notes = notes, scheduledDate = scheduledDate)
+        db.parentalActivityDao().update(activity)
+        parentalActivitySync.push(activity)
+    }
 
     suspend fun updateChoreNotes(chore: Chore, notes: String?) = db.choreDao().update(chore.copy(notes = notes))
     suspend fun updateFamilyActivityNotes(activity: FamilyActivity, notes: String?) = db.familyActivityDao().update(activity.copy(notes = notes))
-    suspend fun updateParentalActivityNotes(activity: ParentalActivity, notes: String?) = db.parentalActivityDao().update(activity.copy(notes = notes))
-    suspend fun updateParentalActivitySchedule(activity: ParentalActivity, scheduledDate: String?) =
-        db.parentalActivityDao().update(activity.copy(scheduledDate = scheduledDate))
 
-    suspend fun deleteParentalActivity(id: Long) = db.parentalActivityDao().delete(id)
+    suspend fun updateParentalActivityNotes(activity: ParentalActivity, notes: String?) {
+        val updated = activity.copy(notes = notes)
+        db.parentalActivityDao().update(updated)
+        parentalActivitySync.push(updated)
+    }
+
+    suspend fun updateParentalActivitySchedule(activity: ParentalActivity, scheduledDate: String?) {
+        val updated = activity.copy(scheduledDate = scheduledDate)
+        db.parentalActivityDao().update(updated)
+        parentalActivitySync.push(updated)
+    }
+
+    suspend fun deleteParentalActivity(id: String) {
+        db.parentalActivityDao().delete(id)
+        parentalActivitySync.delete(id)
+    }
 
     // --- Scheduled activities (Scheduled tab) ---
 

@@ -204,14 +204,17 @@ interface ParentalActivityDao {
     @Query("SELECT * FROM parental_activities WHERE active = 1 ORDER BY title ASC")
     fun observeActive(): Flow<List<ParentalActivity>>
 
-    @Insert
-    suspend fun insert(activity: ParentalActivity): Long
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insert(activity: ParentalActivity)
+
+    @Query("SELECT * FROM parental_activities WHERE id = :activityId LIMIT 1")
+    suspend fun findById(activityId: String): ParentalActivity?
 
     @Update
     suspend fun update(activity: ParentalActivity)
 
     @Query("DELETE FROM parental_activities WHERE id = :activityId")
-    suspend fun delete(activityId: Long)
+    suspend fun delete(activityId: String)
 
     @Query("SELECT * FROM parental_activity_logs WHERE isoWeek = :isoWeek")
     fun observeLogsForWeek(isoWeek: String): Flow<List<ParentalActivityLog>>
@@ -220,7 +223,7 @@ interface ParentalActivityDao {
     fun observeAllLogs(): Flow<List<ParentalActivityLog>>
 
     @Query("SELECT * FROM parental_activity_logs WHERE activityId = :activityId AND isoWeek = :isoWeek LIMIT 1")
-    suspend fun findLog(activityId: Long, isoWeek: String): ParentalActivityLog?
+    suspend fun findLog(activityId: String, isoWeek: String): ParentalActivityLog?
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertLog(log: ParentalActivityLog)

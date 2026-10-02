@@ -123,9 +123,8 @@ enum class PlanItemType { CHORE, FAMILY_ACTIVITY, PARENTAL_ACTIVITY }
  *  independent of completion state. No FK here since [itemId] points at a different table
  *  depending on [itemType].
  *
- *  itemId is a String even though FamilyActivity/ParentalActivity still use Long ids (only Chore
- *  has moved to a UUID string so far, for Firestore sync) — Repository stores a Long id's string
- *  form here and parses it back when looking up those two tables. */
+ *  itemId is a String, matching every item type's own id (Chore/FamilyActivity/ParentalActivity
+ *  all moved from autoincrement Long to a UUID string for Firestore sync). */
 @Entity(tableName = "plan_entries")
 data class PlanEntry(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
@@ -186,10 +185,13 @@ data class FamilyActivityLog(
 enum class ParentalAudience { PERSONAL, TOGETHER, ADULT_ONLY, FAMILY }
 enum class BudgetTier { LOW, MEDIUM, HIGH }
 
-/** A weekly parental/couple activity suggestion. */
+/** A weekly parental/couple activity suggestion.
+ *
+ *  Id is a client-generated UUID string, same reasoning as [Assignee.id]/[Chore.id]/
+ *  [FamilyActivity.id] — this entity syncs to Firestore too (see ParentalActivitySync.kt). */
 @Entity(tableName = "parental_activities")
 data class ParentalActivity(
-    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    @PrimaryKey val id: String = UUID.randomUUID().toString(),
     val title: String,
     val audience: ParentalAudience,
     val budget: BudgetTier,
@@ -211,7 +213,7 @@ data class ParentalActivity(
 )
 data class ParentalActivityLog(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
-    val activityId: Long,
+    val activityId: String,
     val isoWeek: String,
     val done: Boolean = false,
 )
