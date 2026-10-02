@@ -8,6 +8,15 @@ below).
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-10-01
+
+### Fixed
+- Weekly and 2x/week chores were hardcoded due on Monday (and Monday+Thursday), with no way to
+  change it. A chore added on any other day had no valid due date until its first real cycle date,
+  so it silently never showed up anywhere — it was saved, just invisible. The Add/Edit dialog now
+  has a day-of-week picker (defaulting new chores to today), and card labels show the picked day,
+  e.g. "Weekly · Thu".
+
 ## [0.2.0] - 2026-10-01
 
 ### Added
@@ -35,6 +44,7 @@ sequencing a day's tasks, a Scheduled tab for planned-ahead For Us activities, a
 with monthly completion stats and an assignee editor, light/dark/system theming, and daily chore
 reminders. All data local-only (Room/SQLite), no sync.
 
-[Unreleased]: https://github.com/jpdrw12/Household-Chores-and-Activities/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/jpdrw12/Household-Chores-and-Activities/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/jpdrw12/Household-Chores-and-Activities/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/jpdrw12/Household-Chores-and-Activities/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/jpdrw12/Household-Chores-and-Activities/releases/tag/v0.1.0
