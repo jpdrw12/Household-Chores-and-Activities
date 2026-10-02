@@ -53,9 +53,12 @@ data class Chore(
 )
 
 /** A reference photo attached to a chore showing what "done" should look like. A chore can have
- *  several. Deliberately NOT synced — [uri] is a local file:// path from the camera/gallery picker
- *  that wouldn't resolve on another device without a real photo-upload pipeline (Firebase
- *  Storage), which is out of scope for this sync pass. */
+ *  several. Deliberately, PERMANENTLY not synced — [uri] is a local file:// path from the camera/
+ *  gallery picker that wouldn't resolve on another device without uploading it somewhere first.
+ *  A Firebase Storage-backed version of this was built and verified working, but Firebase now
+ *  requires the paid Blaze plan (a billing account) to create a Storage bucket at all, even for
+ *  usage that stays within its free tier — out of step with this project's "stays free" goal, so
+ *  that version was reverted rather than kept as permanently-broken dead code. See CHANGELOG. */
 @Entity(
     tableName = "chore_photos",
     foreignKeys = [

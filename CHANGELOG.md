@@ -8,6 +8,18 @@ below).
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-10-01
+
+### Changed
+- ChorePhoto sync (Firebase Storage + Firestore) was built, verified working end to end on real
+  devices, then **reverted**: as of late 2024, Firebase requires the paid Blaze plan (a billing
+  account on file) to create a Storage bucket at all, even for usage that would stay entirely
+  within its free tier. That's a real, if small, departure from "this stays free," so chore
+  reference photos are a **permanent**, deliberate exception to the sync rollout rather than a
+  pending TODO — see the doc comment on `ChorePhoto` in `Entities.kt`. Every other entity
+  (Assignees, Chores, Family/Parental Activities, chore completions, subtasks + checks, activity
+  ideas, both activity logs) still syncs via the free Spark-plan Firestore/Auth setup from 0.2.0.
+
 ## [0.5.0] - 2026-10-01
 
 ### Added
@@ -71,7 +83,8 @@ sequencing a day's tasks, a Scheduled tab for planned-ahead For Us activities, a
 with monthly completion stats and an assignee editor, light/dark/system theming, and daily chore
 reminders. All data local-only (Room/SQLite), no sync.
 
-[Unreleased]: https://github.com/jpdrw12/Household-Chores-and-Activities/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/jpdrw12/Household-Chores-and-Activities/compare/v0.5.1...HEAD
+[0.5.1]: https://github.com/jpdrw12/Household-Chores-and-Activities/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/jpdrw12/Household-Chores-and-Activities/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/jpdrw12/Household-Chores-and-Activities/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/jpdrw12/Household-Chores-and-Activities/compare/v0.2.1...v0.3.0

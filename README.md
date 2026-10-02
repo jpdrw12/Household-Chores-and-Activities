@@ -44,10 +44,16 @@ Minimum SDK 24, target/compile SDK 34, JDK 17.
 
 ## Cross-device sync
 
-Assignees and chores sync across devices via Firebase Firestore; this is a proof of concept, not
-a finished feature — see `CHANGELOG.md` for what's synced and what isn't, and the known
-limitations (a single shared, unauthenticated Firestore path — fine for one private household
-testing this, not for shipping to strangers).
+Assignees, Chores, Family/Parental Activities, chore completions, chore subtasks + their check
+state, activity ideas, and both activity completion logs all sync across devices via Firebase
+Firestore; this is a proof of concept, not a finished feature — see `CHANGELOG.md` for the full
+list and the known limitations (a single shared, unauthenticated Firestore path — fine for one
+private household testing this, not for shipping to strangers).
+
+Chore reference **photos** are the one deliberate, permanent exception — see the doc comment on
+`ChorePhoto` in `Entities.kt`. A Firebase Storage-backed version was built and verified working,
+then reverted: Storage now requires the paid Blaze plan (a billing account), which breaks this
+project's "stays free" goal even though actual usage would likely cost $0.
 
 To build and run with sync working:
 1. Create a Firebase project at [console.firebase.google.com](https://console.firebase.google.com)
@@ -87,8 +93,9 @@ local on-device data (see the Room migration note in `AppDatabase.kt`).
 - Reminder time (currently fixed at 6pm) isn't user-configurable yet.
 - No per-photo full-screen viewer — thumbnails only.
 - No undo after deleting a chore/activity/subtask.
-- Cross-device sync (see above) only covers Assignees and Chores so far, and uses a single
-  shared, unauthenticated Firestore path rather than real per-household accounts.
+- Cross-device sync (see above) uses a single shared, unauthenticated Firestore path rather than
+  real per-household accounts. Chore reference photos are a permanent exception, not synced
+  (would need a paid Firebase plan).
 - Facial recognition for auto-selecting who's checking off a task, with a manual picker
   fallback for shared tasks — flagged as a separate future project, meaningfully larger
   scope than anything else here (on-device ML Kit/CameraX + a per-family-member enrollment
