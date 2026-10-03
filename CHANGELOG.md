@@ -8,6 +8,16 @@ below).
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-10-03
+
+### Changed
+- Split the Chores screen's main list into three: **Due today** (today is literally the chore's
+  scheduled day), **Overdue** (missed a past scheduled day, still unchecked), and **Not scheduled
+  today** (collapsible — today isn't a scheduled day and nothing's pending). Previously a missed
+  weekly/custom chore stayed mixed into the main list forever until checked off, which meant e.g. a
+  Monday-only chore still showed as "overdue" on a Saturday instead of moving to "Not scheduled
+  today" like a same-week chore that's simply not due yet.
+
 ## [0.11.0] - 2026-10-03
 
 ### Added

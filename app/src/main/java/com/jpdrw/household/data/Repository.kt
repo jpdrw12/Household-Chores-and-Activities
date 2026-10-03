@@ -143,12 +143,54 @@ class Repository(private val db: AppDatabase, householdId: String, context: andr
 
     // --- Chores ---
 
-    /**
-     * A chore appears on [date] if its most recent scheduled due date on or before [date] hasn't
-     * been completed yet — so a missed weekly/custom chore keeps showing (marked overdue) every
-     * day until it's checked off, instead of disappearing until its next scheduled date.
-     */
+    /** A chore is due on [date] if [date] is literally one of its scheduled days (or [date] is the
+     *  day it was created — see [lastScheduledDateOnOrBefore]'s doc comment on why that fallback
+     *  exists). Doesn't look at completion state or past misses; see [observeOverdueChoresForDate]
+     *  for those. */
+    private fun isDueToday(chore: Chore, day: LocalDate): Boolean {
+        val createdDay = java.time.Instant.ofEpochMilli(chore.createdAt).atZone(java.time.ZoneId.systemDefault()).toLocalDate()
+        return isDueOnRaw(chore, day) || day == createdDay
+    }
+
+    /** Chores whose scheduled day is literally [date], not yet completed for it. */
     fun observeChoresForDate(date: String): Flow<List<ChoreWithOccurrence>> {
+        val day = LocalDate.parse(date)
+        return combine(
+            db.choreDao().observeActive(),
+            db.assigneeDao().observeAll(),
+            db.choreDao().observeOccurrencesForDate(date),
+        ) { chores, assignees, occurrences ->
+            val assigneeNames = assignees.associateBy { it.id }
+            val occurrenceByChoreId = occurrences.associateBy { it.choreId }
+            chores
+                .filter { isDueToday(it, day) }
+                .mapNotNull { chore ->
+                    val occurrence = occurrenceByChoreId[chore.id]
+                    if (occurrence?.completed == true) return@mapNotNull null
+                    ChoreWithOccurrence(
+                        chore = chore,
+                        occurrence = occurrence,
+                        assigneeName = assigneeNames[chore.assigneeId]?.name ?: "Family",
+                        effectiveDueDate = date,
+                        isOverdue = isPastEstimatedEndTime(chore, day),
+                    )
+                }
+                .sortedWith(
+                    compareByDescending<ChoreWithOccurrence> { it.isOverdue }
+                        .thenByDescending { it.chore.priority.ordinal }
+                        .thenBy { it.chore.title },
+                )
+        }
+    }
+
+    /**
+     * Chores whose scheduled day was some day *before* [date] (not [date] itself — that's
+     * [observeChoresForDate]) and still haven't been checked off for it. Separated out so a
+     * Monday-only chore doesn't sit in the main "due today" list on a Saturday just because it
+     * was missed — it belongs here instead, distinct from both "due today" and "not scheduled
+     * today at all" ([observeChoresNotScheduledForDate]).
+     */
+    fun observeOverdueChoresForDate(date: String): Flow<List<ChoreWithOccurrence>> {
         val day = LocalDate.parse(date)
         val rangeStart = day.minusDays(MAX_OVERDUE_LOOKBACK_DAYS.toLong()).format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE)
         return combine(
@@ -159,6 +201,7 @@ class Repository(private val db: AppDatabase, householdId: String, context: andr
             val assigneeNames = assignees.associateBy { it.id }
             val occurrenceByKey = occurrences.associateBy { it.choreId to it.dueDate }
             chores
+                .filter { !isDueToday(it, day) }
                 .mapNotNull { chore ->
                     val lastDue = lastScheduledDateOnOrBefore(chore, day) ?: return@mapNotNull null
                     val occurrence = occurrenceByKey[chore.id to lastDue.toString()]
@@ -168,14 +211,10 @@ class Repository(private val db: AppDatabase, householdId: String, context: andr
                         occurrence = occurrence,
                         assigneeName = assigneeNames[chore.assigneeId]?.name ?: "Family",
                         effectiveDueDate = lastDue.toString(),
-                        isOverdue = lastDue.isBefore(day) || isPastEstimatedEndTime(chore, lastDue),
+                        isOverdue = true,
                     )
                 }
-                .sortedWith(
-                    compareByDescending<ChoreWithOccurrence> { it.isOverdue }
-                        .thenByDescending { it.chore.priority.ordinal }
-                        .thenBy { it.chore.title },
-                )
+                .sortedWith(compareByDescending<ChoreWithOccurrence> { it.chore.priority.ordinal }.thenBy { it.chore.title })
         }
     }
 
@@ -201,11 +240,10 @@ class Repository(private val db: AppDatabase, householdId: String, context: andr
         }
 
     /**
-     * Active chores that are neither due/overdue on [date] (the main list) nor completed for it
-     * (the Completed section) — i.e. today just isn't one of their scheduled days. Mirrors
-     * [observeChoresForDate]'s own exclusion logic: a chore belongs here exactly when its last
-     * scheduled date on or before [date] has already been completed, or (shouldn't normally
-     * happen for an existing chore, but kept for safety) it has no scheduled date at all yet.
+     * Active chores where [date] isn't a scheduled day at all ([observeChoresForDate] doesn't
+     * include it) and there's no missed-and-incomplete past occurrence hanging over it either
+     * ([observeOverdueChoresForDate] doesn't include it). Mutually exclusive with both of those
+     * and with the Completed section.
      */
     fun observeChoresNotScheduledForDate(date: String): Flow<List<UnscheduledChore>> {
         val day = LocalDate.parse(date)
@@ -219,6 +257,7 @@ class Repository(private val db: AppDatabase, householdId: String, context: andr
             val occurrenceByKey = occurrences.associateBy { it.choreId to it.dueDate }
             chores
                 .filter { chore ->
+                    if (isDueToday(chore, day)) return@filter false
                     val lastDue = lastScheduledDateOnOrBefore(chore, day) ?: return@filter true
                     occurrenceByKey[chore.id to lastDue.toString()]?.completed == true
                 }
@@ -241,17 +280,21 @@ class Repository(private val db: AppDatabase, householdId: String, context: andr
             activities.filter { it.id !in doneIds }
         }
 
-    /** Tasks (of any type) due on [date] that haven't been placed into the roadmap yet. */
+    /** Tasks (of any type) due on [date] that haven't been placed into the roadmap yet. Chores
+     *  includes both due-today and overdue — [observeChoresForDate] and
+     *  [observeOverdueChoresForDate] split those for the Chores screen's display, but both still
+     *  need a day's work done, so both are plannable. */
     fun observeAvailableForPlan(date: String): Flow<List<PlanTask>> =
         combine(
             observeChoresForDate(date),
+            observeOverdueChoresForDate(date),
             availableFamilyActivities(date),
             availableParentalActivities(DateUtils.isoWeek(LocalDate.parse(date))),
             db.planDao().observeForDate(date),
-        ) { chores, familyActs, parentalActs, planned ->
+        ) { chores, overdueChores, familyActs, parentalActs, planned ->
             val plannedKeys = planned.map { it.itemType to it.itemId }.toSet()
             buildList {
-                chores.forEach { c -> add(PlanTask(PlanItemType.CHORE, c.chore.id, c.chore.title, c.assigneeName)) }
+                (chores + overdueChores).forEach { c -> add(PlanTask(PlanItemType.CHORE, c.chore.id, c.chore.title, c.assigneeName)) }
                 familyActs.forEach { a -> add(PlanTask(PlanItemType.FAMILY_ACTIVITY, a.id, a.title, if (a.category == ActivityCategory.INDOOR) "Indoor" else "Outdoor")) }
                 parentalActs.forEach { a -> add(PlanTask(PlanItemType.PARENTAL_ACTIVITY, a.id, a.title, audienceLabel(a.audience), isSpicy = a.isSpicy, isScheduledToday = a.scheduledDate == date)) }
             }.filter { (it.itemType to it.itemId) !in plannedKeys }

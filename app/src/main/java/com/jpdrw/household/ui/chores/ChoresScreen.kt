@@ -88,6 +88,7 @@ fun ChoresScreen(repository: Repository) {
     var selectedDate by remember { mutableStateOf(LocalDate.now()) }
     val dateIso = selectedDate.format(DateTimeFormatter.ISO_LOCAL_DATE)
     val chores by repository.observeChoresForDate(dateIso).collectAsState(initial = emptyList())
+    val overdueChores by repository.observeOverdueChoresForDate(dateIso).collectAsState(initial = emptyList())
     val completedChores by repository.observeCompletedChoresForDate(dateIso).collectAsState(initial = emptyList())
     val unscheduledChores by repository.observeChoresNotScheduledForDate(dateIso).collectAsState(initial = emptyList())
     val assignees by repository.observeAssignees().collectAsState(initial = emptyList())
@@ -108,13 +109,34 @@ fun ChoresScreen(repository: Repository) {
     ) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
             DateSelector(selectedDate = selectedDate, onDateChange = { selectedDate = it })
-            if (chores.isEmpty() && completedChores.isEmpty() && unscheduledChores.isEmpty()) {
+            if (chores.isEmpty() && overdueChores.isEmpty() && completedChores.isEmpty() && unscheduledChores.isEmpty()) {
                 Text(
                     "No chores due on this date.",
                     modifier = Modifier.padding(24.dp),
                 )
             } else {
                 LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    if (overdueChores.isNotEmpty()) {
+                        item {
+                            Text(
+                                "Overdue",
+                                style = MaterialTheme.typography.titleSmall,
+                                color = MaterialTheme.colorScheme.error,
+                            )
+                        }
+                        items(overdueChores, key = { "overdue_${it.chore.id}" }) { item ->
+                            ChoreCard(
+                                item = item,
+                                repository = repository,
+                                assignees = assignees,
+                                onToggle = { checked, completedBy ->
+                                    scope.launch { repository.setChoreCompleted(item.chore.id, item.effectiveDueDate, checked, null, completedBy) }
+                                },
+                                onEdit = { editingChore = item.chore },
+                                onDelete = { deletingChore = item.chore },
+                            )
+                        }
+                    }
                     items(chores, key = { it.chore.id }) { item ->
                         ChoreCard(
                             item = item,
