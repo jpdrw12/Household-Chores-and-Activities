@@ -283,6 +283,7 @@ class Repository(private val db: AppDatabase, householdId: String, context: andr
 
     private fun isDueOnRaw(chore: Chore, day: LocalDate): Boolean = when (chore.frequency) {
         Frequency.DAILY -> true
+        Frequency.WEEKDAYS -> day.dayOfWeek !in setOf(java.time.DayOfWeek.SATURDAY, java.time.DayOfWeek.SUNDAY)
         Frequency.WEEKLY -> day.dayOfWeek.value == (chore.dueDayOfWeek ?: java.time.DayOfWeek.MONDAY.value)
         Frequency.TWICE_WEEKLY ->
             day.dayOfWeek.value == (chore.dueDayOfWeek ?: java.time.DayOfWeek.MONDAY.value) ||

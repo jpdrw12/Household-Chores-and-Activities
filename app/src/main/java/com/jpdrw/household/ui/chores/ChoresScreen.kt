@@ -9,6 +9,7 @@ import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -220,6 +221,7 @@ private fun ChoreCard(
 ) {
     var photoExpanded by remember { mutableStateOf(false) }
     var subtasksExpanded by remember { mutableStateOf(false) }
+    var fullScreenPhoto by remember { mutableStateOf<ChorePhoto?>(null) }
     var showWhoDialog by remember { mutableStateOf(false) }
     val completed = item.occurrence?.completed == true
     val photos by repository.observeChorePhotos(item.chore.id).collectAsState(initial = emptyList())
@@ -341,7 +343,11 @@ private fun ChoreCard(
                     } else {
                         LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(bottom = 8.dp)) {
                             items(photos, key = { it.id }) { photo ->
-                                PhotoThumbnail(photo = photo, onDelete = { scope.launch { repository.deleteChorePhoto(photo.id) } })
+                                PhotoThumbnail(
+                                    photo = photo,
+                                    onClick = { fullScreenPhoto = photo },
+                                    onDelete = { scope.launch { repository.deleteChorePhoto(photo.id) } },
+                                )
                             }
                         }
                     }
@@ -402,6 +408,35 @@ private fun ChoreCard(
             dismissButton = { TextButton(onClick = { showWhoDialog = false }) { Text("Cancel") } },
         )
     }
+
+    fullScreenPhoto?.let { photo ->
+        FullScreenPhotoDialog(photo = photo, onDismiss = { fullScreenPhoto = null })
+    }
+}
+
+@Composable
+private fun FullScreenPhotoDialog(photo: ChorePhoto, onDismiss: () -> Unit) {
+    androidx.compose.ui.window.Dialog(
+        onDismissRequest = onDismiss,
+        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
+    ) {
+        androidx.compose.foundation.layout.Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(color = androidx.compose.ui.graphics.Color.Black)
+                .clickable(onClick = onDismiss),
+        ) {
+            AsyncImage(
+                model = photo.uri,
+                contentDescription = null,
+                contentScale = ContentScale.Fit,
+                modifier = Modifier.fillMaxSize(),
+            )
+            IconButton(onClick = onDismiss, modifier = Modifier.align(Alignment.TopEnd).padding(16.dp)) {
+                Icon(Icons.Filled.Close, contentDescription = "Close", tint = androidx.compose.ui.graphics.Color.White)
+            }
+        }
+    }
 }
 
 /** Creates a new file under files/task_photos/ (matches file_paths.xml) and returns its FileProvider uri. */
@@ -412,13 +447,13 @@ private fun createChorePhotoUri(context: android.content.Context): android.net.U
 }
 
 @Composable
-private fun PhotoThumbnail(photo: ChorePhoto, onDelete: () -> Unit) {
+private fun PhotoThumbnail(photo: ChorePhoto, onClick: () -> Unit, onDelete: () -> Unit) {
     androidx.compose.foundation.layout.Box(modifier = Modifier.size(72.dp)) {
         AsyncImage(
             model = photo.uri,
             contentDescription = null,
             contentScale = ContentScale.Crop,
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier.fillMaxSize().clickable(onClick = onClick),
         )
         IconButton(onClick = onDelete, modifier = Modifier.size(20.dp)) {
             Icon(Icons.Filled.Close, contentDescription = "Remove photo", tint = MaterialTheme.colorScheme.error)
@@ -484,6 +519,7 @@ private fun dayAbbrev(isoDay: Int): String = when (isoDay) {
 
 private fun Chore.frequencyLabel(): String = when (frequency) {
     Frequency.DAILY -> "Daily"
+    Frequency.WEEKDAYS -> "Weekdays"
     Frequency.WEEKLY -> "Weekly · ${dayAbbrev(dueDayOfWeek ?: 1)}"
     Frequency.TWICE_WEEKLY -> "2x / week · ${dayAbbrev(dueDayOfWeek ?: 1)}/${dayAbbrev(dueDayOfWeek2 ?: 4)}"
     Frequency.CUSTOM -> "Every ${customIntervalDays ?: 1} day(s)"
@@ -662,6 +698,7 @@ private fun DayOfWeekPicker(selected: Int, onSelect: (Int) -> Unit) {
 
 private fun Frequency.label(): String = when (this) {
     Frequency.DAILY -> "Daily"
+    Frequency.WEEKDAYS -> "Weekdays (Mon–Fri)"
     Frequency.WEEKLY -> "Weekly"
     Frequency.TWICE_WEEKLY -> "2x / week"
     Frequency.CUSTOM -> "Custom (every N days)"

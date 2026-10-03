@@ -8,6 +8,21 @@ below).
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-10-03
+
+### Added
+- "Weekdays" chore frequency (Mon–Fri), alongside Daily/Weekly/2x-week/Custom.
+- Tapping a reference photo thumbnail now opens it full-screen; tap again (or the close button) to
+  dismiss. Was thumbnail-only before.
+
+### Fixed
+- A synced-in reference photo could silently vanish right after arriving: on a fresh device, its
+  Firestore doc and its chore's doc sync down as two independent listeners, so the photo could try
+  to insert before its chore existed locally yet, violating the choreId foreign key and getting
+  dropped with no retry. Same race `ChoreOccurrenceSync` already handles — caught and skipped the
+  same way, which self-heals on the next app start since a new listener registration redelivers
+  every doc as if newly added, and by then the chore has synced down.
+
 ## [0.9.0] - 2026-10-02
 
 ### Added

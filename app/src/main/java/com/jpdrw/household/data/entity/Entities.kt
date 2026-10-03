@@ -19,7 +19,7 @@ data class Assignee(
     val isDefault: Boolean = false,
 )
 
-enum class Frequency { DAILY, WEEKLY, TWICE_WEEKLY, CUSTOM }
+enum class Frequency { DAILY, WEEKDAYS, WEEKLY, TWICE_WEEKLY, CUSTOM }
 enum class Priority { LOW, NORMAL, HIGH, CRITICAL }
 
 /** A chore template, e.g. "Sweep" or "Clean bathroom".

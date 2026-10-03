@@ -1,6 +1,7 @@
 package com.jpdrw.household.data
 
 import android.content.Context
+import android.database.sqlite.SQLiteConstraintException
 import android.net.Uri
 import android.util.Log
 import com.google.firebase.firestore.DocumentChange
@@ -19,27 +20,45 @@ private const val TAG = "ChorePhotoSync"
  * ChorePhoto's doc comment for why Storage was ruled out. [context] is needed (unlike the other
  * XxxSync classes) to decode/compress the local uri on push and to write a synced-in photo's bytes
  * to local storage on pull — see writeDecodedPhoto.
+ *
+ * Same race as ChoreOccurrenceSync: a photo and its chore sync down as two independent listeners,
+ * so on a fresh device the photo's doc can arrive and try to insert before its chore row exists
+ * locally, violating the choreId foreign key. Caught and skipped rather than crashing the sync
+ * coroutine — self-heals on the next app start, since a brand-new listener registration redelivers
+ * every existing doc as if newly added, and by then the chore has almost certainly synced down.
  */
 class ChorePhotoSync(private val photoDao: ChorePhotoDao, private val context: Context, householdId: String) {
     private val collection = FirebaseFirestore.getInstance().collection("households/$householdId/chore_photos")
     private var listener: ListenerRegistration? = null
 
     fun start(scope: CoroutineScope) {
+        Log.d(TAG, "start() called, listener already active = ${listener != null}")
         if (listener != null) return
         listener = collection.addSnapshotListener { snapshot, error ->
+            Log.d(TAG, "snapshot listener fired: error=$error, docCount=${snapshot?.documentChanges?.size}")
             if (error != null || snapshot == null) return@addSnapshotListener
             scope.launch {
                 for (change in snapshot.documentChanges) {
                     val id = change.document.id
                     if (change.type == DocumentChange.Type.REMOVED) {
+                        Log.d(TAG, "deleting $id")
                         photoDao.delete(id)
                         continue
                     }
-                    val choreId = change.document.getString("choreId") ?: continue
-                    val data = change.document.getString("data") ?: continue
+                    val choreId = change.document.getString("choreId")
+                    val data = change.document.getString("data")
+                    if (choreId == null || data == null) {
+                        Log.e(TAG, "doc $id missing choreId or data, skipping")
+                        continue
+                    }
                     val addedAt = change.document.getLong("addedAt") ?: System.currentTimeMillis()
                     val uri = writeDecodedPhoto(context, id, data)
-                    photoDao.insert(ChorePhoto(id = id, choreId = choreId, uri = uri, addedAt = addedAt))
+                    Log.d(TAG, "upserting $id -> $uri")
+                    try {
+                        photoDao.insert(ChorePhoto(id = id, choreId = choreId, uri = uri, addedAt = addedAt))
+                    } catch (e: SQLiteConstraintException) {
+                        Log.w(TAG, "skipping $id — chore $choreId not synced locally yet", e)
+                    }
                 }
             }
         }
