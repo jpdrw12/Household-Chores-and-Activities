@@ -38,6 +38,11 @@ data class ChoreWithOccurrence(
 
 data class AssigneeStat(val assigneeName: String, val completed: Int)
 
+/** An active chore with nothing due today — not because it was completed today (that's
+ *  [ChoreWithOccurrence] in the Completed section), but because today just isn't one of its
+ *  scheduled days and it has no overdue instance hanging over it either. */
+data class UnscheduledChore(val chore: Chore, val assigneeName: String)
+
 data class SubtaskWithChecks(
     val subtask: ChoreSubtask,
     /** Assignee IDs who have checked this subtask off for the date in question. */
@@ -194,6 +199,33 @@ class Repository(private val db: AppDatabase, householdId: String, context: andr
                 }
                 .sortedBy { it.chore.title }
         }
+
+    /**
+     * Active chores that are neither due/overdue on [date] (the main list) nor completed for it
+     * (the Completed section) — i.e. today just isn't one of their scheduled days. Mirrors
+     * [observeChoresForDate]'s own exclusion logic: a chore belongs here exactly when its last
+     * scheduled date on or before [date] has already been completed, or (shouldn't normally
+     * happen for an existing chore, but kept for safety) it has no scheduled date at all yet.
+     */
+    fun observeChoresNotScheduledForDate(date: String): Flow<List<UnscheduledChore>> {
+        val day = LocalDate.parse(date)
+        val rangeStart = day.minusDays(MAX_OVERDUE_LOOKBACK_DAYS.toLong()).format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE)
+        return combine(
+            db.choreDao().observeActive(),
+            db.assigneeDao().observeAll(),
+            db.choreDao().observeOccurrencesBetween(rangeStart, date),
+        ) { chores, assignees, occurrences ->
+            val assigneeNames = assignees.associateBy { it.id }
+            val occurrenceByKey = occurrences.associateBy { it.choreId to it.dueDate }
+            chores
+                .filter { chore ->
+                    val lastDue = lastScheduledDateOnOrBefore(chore, day) ?: return@filter true
+                    occurrenceByKey[chore.id to lastDue.toString()]?.completed == true
+                }
+                .map { chore -> UnscheduledChore(chore = chore, assigneeName = assigneeNames[chore.assigneeId]?.name ?: "Family") }
+                .sortedBy { it.chore.title }
+        }
+    }
 
     // --- Day roadmap (Mapper tab) — mixes chores, family activities, and "For Us" activities ---
 

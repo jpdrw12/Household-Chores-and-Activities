@@ -72,6 +72,7 @@ import coil.compose.AsyncImage
 import com.jpdrw.household.data.ChoreWithOccurrence
 import com.jpdrw.household.data.Repository
 import com.jpdrw.household.data.SubtaskWithChecks
+import com.jpdrw.household.data.UnscheduledChore
 import com.jpdrw.household.data.entity.Assignee
 import com.jpdrw.household.data.entity.Chore
 import com.jpdrw.household.data.entity.ChorePhoto
@@ -88,11 +89,13 @@ fun ChoresScreen(repository: Repository) {
     val dateIso = selectedDate.format(DateTimeFormatter.ISO_LOCAL_DATE)
     val chores by repository.observeChoresForDate(dateIso).collectAsState(initial = emptyList())
     val completedChores by repository.observeCompletedChoresForDate(dateIso).collectAsState(initial = emptyList())
+    val unscheduledChores by repository.observeChoresNotScheduledForDate(dateIso).collectAsState(initial = emptyList())
     val assignees by repository.observeAssignees().collectAsState(initial = emptyList())
     var showAddDialog by remember { mutableStateOf(false) }
     var editingChore by remember { mutableStateOf<Chore?>(null) }
     var deletingChore by remember { mutableStateOf<Chore?>(null) }
     var completedExpanded by remember { mutableStateOf(false) }
+    var unscheduledExpanded by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
     Scaffold(
@@ -105,7 +108,7 @@ fun ChoresScreen(repository: Repository) {
     ) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
             DateSelector(selectedDate = selectedDate, onDateChange = { selectedDate = it })
-            if (chores.isEmpty() && completedChores.isEmpty()) {
+            if (chores.isEmpty() && completedChores.isEmpty() && unscheduledChores.isEmpty()) {
                 Text(
                     "No chores due on this date.",
                     modifier = Modifier.padding(24.dp),
@@ -141,6 +144,24 @@ fun ChoresScreen(repository: Repository) {
                                     onToggle = { checked, completedBy ->
                                         scope.launch { repository.setChoreCompleted(item.chore.id, item.effectiveDueDate, checked, null, completedBy) }
                                     },
+                                    onEdit = { editingChore = item.chore },
+                                    onDelete = { deletingChore = item.chore },
+                                )
+                            }
+                        }
+                    }
+                    if (unscheduledChores.isNotEmpty()) {
+                        item {
+                            TextButton(onClick = { unscheduledExpanded = !unscheduledExpanded }) {
+                                Icon(Icons.Filled.Checklist, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Text(" Not scheduled today (${unscheduledChores.size})")
+                                Icon(if (unscheduledExpanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore, contentDescription = null)
+                            }
+                        }
+                        if (unscheduledExpanded) {
+                            items(unscheduledChores, key = { "unscheduled_${it.chore.id}" }) { item ->
+                                UnscheduledChoreRow(
+                                    item = item,
                                     onEdit = { editingChore = item.chore },
                                     onDelete = { deletingChore = item.chore },
                                 )
@@ -206,6 +227,26 @@ private fun DateSelector(selectedDate: LocalDate, onDateChange: (LocalDate) -> U
             style = MaterialTheme.typography.titleMedium,
         )
         TextButton(onClick = { onDateChange(selectedDate.plusDays(1)) }) { Text("Next >") }
+    }
+}
+
+@Composable
+private fun UnscheduledChoreRow(item: UnscheduledChore, onEdit: () -> Unit, onDelete: () -> Unit) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(item.chore.title)
+                Text(
+                    "${item.chore.frequencyLabel()} · ${item.assigneeName}",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+            IconButton(onClick = onEdit) { Icon(Icons.Filled.Edit, contentDescription = "Edit chore") }
+            IconButton(onClick = onDelete) { Icon(Icons.Filled.Delete, contentDescription = "Delete chore") }
+        }
     }
 }
 

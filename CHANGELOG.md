@@ -8,6 +8,13 @@ below).
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-10-03
+
+### Added
+- "Not scheduled today" section on the Chores screen, collapsible like Completed — lists active
+  chores that simply aren't due today and have no overdue instance pending, so the main list isn't
+  the only place to see a chore exists.
+
 ## [0.10.0] - 2026-10-03
 
 ### Added
