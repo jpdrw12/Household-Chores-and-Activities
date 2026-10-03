@@ -8,6 +8,14 @@ below).
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-10-03
+
+### Changed
+- "For Us" tab: Intimate is now a third mutually-exclusive tab alongside Parents and Family & Kids,
+  instead of a toggle that layered on top of whichever of those was selected. Selecting it shows
+  only intimate activities; Parents/Family & Kids no longer reveal them regardless of the old
+  toggle's state. New activities added while on the Intimate tab default to intimate.
+
 ## [0.12.2] - 2026-10-03
 
 ### Changed

@@ -65,14 +65,16 @@ fun ParentalActivitiesScreen(repository: Repository, appPrefs: AppPrefs) {
     var deletingActivity by remember { mutableStateOf<ParentalActivity?>(null) }
     var budgetFilter by remember { mutableStateOf<BudgetTier?>(null) }
     var mode by remember { mutableStateOf(AudienceMode.PARENTS) }
-    var showIntimate by remember { mutableStateOf(false) }
 
     val modeAudiences = when (mode) {
         AudienceMode.PARENTS -> setOf(ParentalAudience.PERSONAL, ParentalAudience.TOGETHER, ParentalAudience.ADULT_ONLY)
         AudienceMode.FAMILY -> setOf(ParentalAudience.FAMILY)
+        AudienceMode.INTIMATE -> ParentalAudience.entries.toSet()
     }
     val filtered = activities.filter {
-        it.audience in modeAudiences && (budgetFilter == null || it.budget == budgetFilter) && (showIntimate || !it.isSpicy)
+        it.audience in modeAudiences &&
+            (budgetFilter == null || it.budget == budgetFilter) &&
+            (it.isSpicy == (mode == AudienceMode.INTIMATE))
     }
     val grouped = ParentalAudience.entries.associateWith { audience ->
         filtered.filter { it.audience == audience }.sortedWith(
@@ -91,7 +93,7 @@ fun ParentalActivitiesScreen(repository: Repository, appPrefs: AppPrefs) {
             Row(modifier = Modifier.padding(16.dp, 8.dp, 16.dp, 0.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 FilterChip(selected = mode == AudienceMode.PARENTS, onClick = { mode = AudienceMode.PARENTS }, label = { Text("Parents") })
                 FilterChip(selected = mode == AudienceMode.FAMILY, onClick = { mode = AudienceMode.FAMILY }, label = { Text("Family & Kids") })
-                FilterChip(selected = showIntimate, onClick = { showIntimate = !showIntimate }, label = { Text("💞 Intimate") })
+                FilterChip(selected = mode == AudienceMode.INTIMATE, onClick = { mode = AudienceMode.INTIMATE }, label = { Text("💞 Intimate") })
             }
             Row(modifier = Modifier.padding(16.dp, 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 FilterChipRow(selected = budgetFilter, onSelect = { budgetFilter = it })
@@ -124,6 +126,7 @@ fun ParentalActivitiesScreen(repository: Repository, appPrefs: AppPrefs) {
             title = "New activity",
             initial = null,
             defaultAudience = if (mode == AudienceMode.FAMILY) ParentalAudience.FAMILY else ParentalAudience.TOGETHER,
+            defaultIsSpicy = mode == AudienceMode.INTIMATE,
             onDismiss = { showAddDialog = false },
             onConfirm = { actTitle, audience, budget, isSpicy ->
                 scope.launch { repository.addParentalActivity(actTitle, audience, budget, isSpicy) }
@@ -161,7 +164,7 @@ fun ParentalActivitiesScreen(repository: Repository, appPrefs: AppPrefs) {
     }
 }
 
-private enum class AudienceMode { PARENTS, FAMILY }
+private enum class AudienceMode { PARENTS, FAMILY, INTIMATE }
 
 private enum class ScheduleStatus { NONE, TODAY, OVERDUE }
 
@@ -256,13 +259,14 @@ private fun ParentalActivityDialog(
     title: String,
     initial: ParentalActivity?,
     defaultAudience: ParentalAudience = ParentalAudience.TOGETHER,
+    defaultIsSpicy: Boolean = false,
     onDismiss: () -> Unit,
     onConfirm: (String, ParentalAudience, BudgetTier, Boolean) -> Unit,
 ) {
     var actTitle by remember { mutableStateOf(initial?.title ?: "") }
     var audience by remember { mutableStateOf(initial?.audience ?: defaultAudience) }
     var budget by remember { mutableStateOf(initial?.budget ?: BudgetTier.LOW) }
-    var isSpicy by remember { mutableStateOf(initial?.isSpicy ?: false) }
+    var isSpicy by remember { mutableStateOf(initial?.isSpicy ?: defaultIsSpicy) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -284,7 +288,7 @@ private fun ParentalActivityDialog(
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Checkbox(checked = isSpicy, onCheckedChange = { isSpicy = it })
-                    Text("💞 Intimate (hidden unless the Intimate filter is on)")
+                    Text("💞 Intimate (shows under the Intimate tab instead of Parents/Family)")
                 }
             }
         },
