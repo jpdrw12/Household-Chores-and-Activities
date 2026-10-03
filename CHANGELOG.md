@@ -8,6 +8,18 @@ below).
 
 ## [Unreleased]
 
+## [0.8.2] - 2026-10-02
+
+### Added
+- A notification after any app update finishes installing ("Household Tracker updated — tap to
+  open the new version"). Android replaces the APK on disk but doesn't reliably kill a backgrounded
+  process right away, so switching back to the app after an update could resume the *old* running
+  process with the old code still loaded — looking like the update silently did nothing unless you
+  knew to force-stop first. Listens for the system's `MY_PACKAGE_REPLACED` broadcast and opens a
+  fresh `MainActivity` when tapped, which guarantees new code loads. Verified on-device: reinstalling
+  over a running instance triggers the broadcast, starts a new process, and posts the notification
+  with a working tap target.
+
 ## [0.8.1] - 2026-10-02
 
 ### Fixed

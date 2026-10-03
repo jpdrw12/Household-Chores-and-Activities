@@ -11,6 +11,7 @@ import com.jpdrw.household.data.AppPrefs
 import com.jpdrw.household.data.HouseholdId
 import com.jpdrw.household.data.seedIfEmpty
 import com.jpdrw.household.reminders.ChoreReminderWorker
+import com.jpdrw.household.update.PackageReplacedReceiver
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
@@ -31,6 +32,7 @@ class HouseholdApp : Application() {
     override fun onCreate() {
         super.onCreate()
         ChoreReminderWorker.ensureChannel(this)
+        PackageReplacedReceiver.ensureChannel(this)
         scheduleDailyReminder()
         applicationScope.launch { database.seedIfEmpty() }
         signInAndStartSync()
