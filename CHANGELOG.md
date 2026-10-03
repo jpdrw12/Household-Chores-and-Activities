@@ -8,6 +8,18 @@ below).
 
 ## [Unreleased]
 
+## [0.12.1] - 2026-10-03
+
+### Fixed
+- The new Due/Overdue/Not-scheduled split (0.12.0) had a redundant "or it's the chore's creation
+  day" fallback in the "due today" check, meant to keep a freshly-added chore from being invisible
+  before its first real cycle date. It was redundant (a chore added via the UI already defaults its
+  due day to today's weekday) and actively harmful: a destructive schema migration re-seeds any
+  missing starter chore with a fresh `createdAt`, so on migration day *every* seeded chore counted
+  as "due today" regardless of its real schedule — which is exactly what made the whole three-way
+  split look like it wasn't doing anything. Removed; the Overdue section's own fallback still
+  covers the "don't hide a freshly-seeded chore" case.
+
 ## [0.12.0] - 2026-10-03
 
 ### Changed

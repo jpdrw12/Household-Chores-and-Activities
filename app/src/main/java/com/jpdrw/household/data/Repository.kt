@@ -143,14 +143,21 @@ class Repository(private val db: AppDatabase, householdId: String, context: andr
 
     // --- Chores ---
 
-    /** A chore is due on [date] if [date] is literally one of its scheduled days (or [date] is the
-     *  day it was created — see [lastScheduledDateOnOrBefore]'s doc comment on why that fallback
-     *  exists). Doesn't look at completion state or past misses; see [observeOverdueChoresForDate]
-     *  for those. */
-    private fun isDueToday(chore: Chore, day: LocalDate): Boolean {
-        val createdDay = java.time.Instant.ofEpochMilli(chore.createdAt).atZone(java.time.ZoneId.systemDefault()).toLocalDate()
-        return isDueOnRaw(chore, day) || day == createdDay
-    }
+    /**
+     * A chore is due on [date] if [date] is literally one of its scheduled days. Deliberately
+     * does NOT also fall back to "or it's the chore's creation day" the way
+     * [lastScheduledDateOnOrBefore] does for the Overdue section: that fallback exists so a
+     * freshly-seeded/added chore isn't invisible before its first real cycle date, but it's
+     * redundant here — a chore added through the UI already defaults its due day to today's
+     * weekday (see ChoreDialog), so [isDueOnRaw] alone already covers it. Including the fallback
+     * here too caused every seeded chore to count as "due today" on any day a destructive schema
+     * migration re-seeds them (createdAt resets to that moment for anything not already present),
+     * which defeated the Due/Overdue/Not-scheduled split entirely on migration day. A chore that
+     * only matches via the creation-day fallback now lands in Overdue instead — still prominent,
+     * not hidden, just not forced into the main list. Doesn't look at completion state or past
+     * misses; see [observeOverdueChoresForDate] for those.
+     */
+    private fun isDueToday(chore: Chore, day: LocalDate): Boolean = isDueOnRaw(chore, day)
 
     /** Chores whose scheduled day is literally [date], not yet completed for it. */
     fun observeChoresForDate(date: String): Flow<List<ChoreWithOccurrence>> {
