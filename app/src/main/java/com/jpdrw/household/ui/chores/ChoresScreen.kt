@@ -97,6 +97,7 @@ fun ChoresScreen(repository: Repository) {
     var deletingChore by remember { mutableStateOf<Chore?>(null) }
     var completedExpanded by remember { mutableStateOf(false) }
     var unscheduledExpanded by remember { mutableStateOf(false) }
+    var overdueExpanded by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
     Scaffold(
@@ -118,23 +119,34 @@ fun ChoresScreen(repository: Repository) {
                 LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     if (overdueChores.isNotEmpty()) {
                         item {
-                            Text(
-                                "Overdue",
-                                style = MaterialTheme.typography.titleSmall,
-                                color = MaterialTheme.colorScheme.error,
-                            )
+                            TextButton(onClick = { overdueExpanded = !overdueExpanded }) {
+                                Icon(
+                                    Icons.Filled.Checklist,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp),
+                                    tint = MaterialTheme.colorScheme.error,
+                                )
+                                Text(" Overdue (${overdueChores.size})", color = MaterialTheme.colorScheme.error)
+                                Icon(
+                                    if (overdueExpanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.error,
+                                )
+                            }
                         }
-                        items(overdueChores, key = { "overdue_${it.chore.id}" }) { item ->
-                            ChoreCard(
-                                item = item,
-                                repository = repository,
-                                assignees = assignees,
-                                onToggle = { checked, completedBy ->
-                                    scope.launch { repository.setChoreCompleted(item.chore.id, item.effectiveDueDate, checked, null, completedBy) }
-                                },
-                                onEdit = { editingChore = item.chore },
-                                onDelete = { deletingChore = item.chore },
-                            )
+                        if (overdueExpanded) {
+                            items(overdueChores, key = { "overdue_${it.chore.id}" }) { item ->
+                                ChoreCard(
+                                    item = item,
+                                    repository = repository,
+                                    assignees = assignees,
+                                    onToggle = { checked, completedBy ->
+                                        scope.launch { repository.setChoreCompleted(item.chore.id, item.effectiveDueDate, checked, null, completedBy) }
+                                    },
+                                    onEdit = { editingChore = item.chore },
+                                    onDelete = { deletingChore = item.chore },
+                                )
+                            }
                         }
                     }
                     items(chores, key = { it.chore.id }) { item ->

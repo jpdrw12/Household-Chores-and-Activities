@@ -8,6 +8,12 @@ below).
 
 ## [Unreleased]
 
+## [0.12.2] - 2026-10-03
+
+### Changed
+- Overdue section is now collapsible, like Completed and Not scheduled today, and collapsed by
+  default.
+
 ## [0.12.1] - 2026-10-03
 
 ### Fixed
