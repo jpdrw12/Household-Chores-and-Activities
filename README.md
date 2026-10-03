@@ -27,9 +27,8 @@ Native Android app (Kotlin + Jetpack Compose + Room) for family chores and activ
   theme toggle and the assignee editor.
 
 All data is stored locally in a Room/SQLite database on-device — no account needed to use the
-app. Assignees and chores additionally sync across devices via Firebase Firestore, a proof of
-concept (see [Cross-device sync](#cross-device-sync) below); every other entity is still
-local-only.
+app. Every entity, including reference photos, additionally syncs across devices sharing the same
+household code via Firebase Firestore (see [Cross-device sync](#cross-device-sync) below).
 
 ## Getting started
 
@@ -44,16 +43,24 @@ Minimum SDK 24, target/compile SDK 34, JDK 17.
 
 ## Cross-device sync
 
-Assignees, Chores, Family/Parental Activities, chore completions, chore subtasks + their check
-state, activity ideas, and both activity completion logs all sync across devices via Firebase
-Firestore; this is a proof of concept, not a finished feature — see `CHANGELOG.md` for the full
-list and the known limitations (a single shared, unauthenticated Firestore path — fine for one
-private household testing this, not for shipping to strangers).
+Every entity — Assignees, Chores, Family/Parental Activities, chore completions, chore subtasks +
+their check state, activity ideas, both activity completion logs, and chore reference photos —
+syncs across devices via Firebase Firestore, scoped under `households/<code>/...` by a short code
+each install generates on first launch (shown on the Admin tab, with a "Join a different household"
+option to switch to someone else's code — see `HouseholdId.kt`). This replaced an earlier version
+that hardcoded a single path every install shared; anonymous auth is still used underneath, so the
+household code is a shared-secret boundary, not full per-user authentication. Joining a code only
+starts a listener on it — it doesn't retroactively push a device's existing data, so a device with
+data from before joining needs a one-time tap of "Push all data to this household" (Admin tab) to
+get its side synced.
 
-Chore reference **photos** are the one deliberate, permanent exception — see the doc comment on
-`ChorePhoto` in `Entities.kt`. A Firebase Storage-backed version was built and verified working,
+Reference **photos** sync too, but not via Firebase Storage: each one is downscaled and
+JPEG-compressed until it fits as a base64 string inside its own Firestore document — see the doc
+comment on `ChorePhoto` in `Entities.kt`. A Storage-backed version was built and verified working,
 then reverted: Storage now requires the paid Blaze plan (a billing account), which breaks this
-project's "stays free" goal even though actual usage would likely cost $0.
+project's "stays free" goal even though actual usage would likely cost $0. The base64-in-Firestore
+approach stays on the free tier; its real limit is Firestore's 1 MiB per-document cap, which is why
+photos are compressed as aggressively as they are.
 
 To build and run with sync working:
 1. Create a Firebase project at [console.firebase.google.com](https://console.firebase.google.com)
@@ -93,9 +100,9 @@ local on-device data (see the Room migration note in `AppDatabase.kt`).
 - Reminder time (currently fixed at 6pm) isn't user-configurable yet.
 - No per-photo full-screen viewer — thumbnails only.
 - No undo after deleting a chore/activity/subtask.
-- Cross-device sync (see above) uses a single shared, unauthenticated Firestore path rather than
-  real per-household accounts. Chore reference photos are a permanent exception, not synced
-  (would need a paid Firebase plan).
+- Cross-device sync (see above) uses a household-code shared secret rather than real per-user
+  accounts — anyone with the code can join, which is the point for sharing between your own
+  devices, but it's not full authentication.
 - Facial recognition for auto-selecting who's checking off a task, with a manual picker
   fallback for shared tasks — flagged as a separate future project, meaningfully larger
   scope than anything else here (on-device ML Kit/CameraX + a per-family-member enrollment

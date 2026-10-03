@@ -81,9 +81,11 @@ private const val MAX_OVERDUE_LOOKBACK_DAYS = 60
 
 /** Single access point for screens: joins Room tables and fills in "for today" rows on the fly.
  *  [householdId] (see HouseholdId.kt) scopes every synced collection to this household alone —
- *  passed in from HouseholdApp, which resolves it once at startup before constructing this. */
-class Repository(private val db: AppDatabase, householdId: String) {
+ *  passed in from HouseholdApp, which resolves it once at startup before constructing this.
+ *  [context] is only needed for ChorePhotoSync (compressing/decoding photo bytes to local files). */
+class Repository(private val db: AppDatabase, householdId: String, context: android.content.Context) {
     private val assigneeSync = AssigneeSync(db.assigneeDao(), householdId)
+    private val chorePhotoSync = ChorePhotoSync(db.chorePhotoDao(), context.applicationContext, householdId)
     private val choreSync = ChoreSync(db.choreDao(), householdId)
     private val familyActivitySync = FamilyActivitySync(db.familyActivityDao(), householdId)
     private val parentalActivitySync = ParentalActivitySync(db.parentalActivityDao(), householdId)
@@ -95,10 +97,10 @@ class Repository(private val db: AppDatabase, householdId: String) {
     private val parentalActivityLogSync = ParentalActivityLogSync(db.parentalActivityDao(), householdId)
 
     /** Starts mirroring every synced Firestore collection into Room. Call once, after sign-in,
-     *  from HouseholdApp — see each XxxSync class's own doc comment for the design. ChorePhoto is
-     *  the one entity NOT synced (local file:// URIs, see its own doc comment). */
+     *  from HouseholdApp — see each XxxSync class's own doc comment for the design. */
     fun startSync(scope: kotlinx.coroutines.CoroutineScope) {
         assigneeSync.start(scope)
+        chorePhotoSync.start(scope)
         choreSync.start(scope)
         familyActivitySync.start(scope)
         parentalActivitySync.start(scope)
@@ -400,8 +402,17 @@ class Repository(private val db: AppDatabase, householdId: String) {
     }
 
     fun observeChorePhotos(choreId: String): Flow<List<ChorePhoto>> = db.chorePhotoDao().observeForChore(choreId)
-    suspend fun addChorePhoto(choreId: String, uri: String) = db.chorePhotoDao().insert(ChorePhoto(choreId = choreId, uri = uri))
-    suspend fun deleteChorePhoto(photoId: Long) = db.chorePhotoDao().delete(photoId)
+
+    suspend fun addChorePhoto(choreId: String, uri: String) {
+        val photo = ChorePhoto(choreId = choreId, uri = uri)
+        db.chorePhotoDao().insert(photo)
+        chorePhotoSync.push(photo)
+    }
+
+    suspend fun deleteChorePhoto(photoId: String) {
+        db.chorePhotoDao().delete(photoId)
+        chorePhotoSync.delete(photoId)
+    }
 
     // --- Chore subtasks ---
     fun observeSubtasks(choreId: String, date: String): Flow<List<SubtaskWithChecks>> =
@@ -595,5 +606,6 @@ class Repository(private val db: AppDatabase, householdId: String) {
         db.activityIdeaDao().listAll().forEach { activityIdeaSync.push(it) }
         db.parentalActivityDao().listAll().forEach { parentalActivitySync.push(it) }
         db.parentalActivityDao().listAllLogs().forEach { parentalActivityLogSync.push(it) }
+        db.chorePhotoDao().listAll().forEach { chorePhotoSync.push(it) }
     }
 }

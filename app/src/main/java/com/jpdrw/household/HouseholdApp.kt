@@ -26,7 +26,7 @@ private val REMINDER_TIME: LocalTime = LocalTime.of(18, 0)
 class HouseholdApp : Application() {
     private val applicationScope = CoroutineScope(SupervisorJob())
     val database by lazy { AppDatabase.get(this) }
-    val repository by lazy { Repository(database, HouseholdId.getOrCreate(this)) }
+    val repository by lazy { Repository(database, HouseholdId.getOrCreate(this), this) }
     val appPrefs by lazy { AppPrefs(this) }
 
     override fun onCreate() {

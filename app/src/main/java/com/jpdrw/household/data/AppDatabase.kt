@@ -50,7 +50,7 @@ import java.util.UUID
     // below). Room only takes the destructive-migration path when the version number itself
     // changes — leaving it the same while the schema drifts hits a hard identity-hash crash on
     // any device with an existing install, instead of a clean wipe-and-reseed.
-    version = 15,
+    version = 16,
     exportSchema = false,
 )
 @TypeConverters(Converters::class)

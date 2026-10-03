@@ -8,6 +8,26 @@ below).
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-10-02
+
+### Added
+- Chore reference photos now sync between devices. Each photo is downscaled (max 1024px) and
+  JPEG-compressed until it fits as a base64 string inside its own Firestore document, instead of
+  uploading to Firebase Storage — Storage now requires the paid Blaze billing plan just to create a
+  bucket at all, which didn't fit this project's "stays free" goal (a Storage-backed version was
+  built and reverted for exactly this reason; see ChorePhoto's doc comment). A real 1.4MB phone
+  photo compresses to ~130KB this way with no visible quality loss, which puts the free Firestore
+  tier's 1GiB storage cap at roughly 6,000+ photos kept at once. EXIF orientation is applied before
+  compressing so photos taken in portrait don't come out sideways on another device. Verified
+  end-to-end: added a photo via the gallery picker, confirmed it landed in Firestore scoped to the
+  household's code, and confirmed the round-tripped copy renders correctly in the app.
+- "Push all data to this household" (Admin tab) now also pushes existing reference photos.
+
+### Changed
+- `ChorePhoto` switched from an auto-incrementing Long id to a client-generated UUID string, same
+  as every other synced entity — this is a destructive schema change (bumped DB version 15 → 16),
+  so existing reference photos are wiped on upgrade like any other pre-1.0 schema bump.
+
 ## [0.8.2] - 2026-10-02
 
 ### Added

@@ -52,13 +52,19 @@ data class Chore(
     val createdAt: Long = System.currentTimeMillis(),
 )
 
-/** A reference photo attached to a chore showing what "done" should look like. A chore can have
- *  several. Deliberately, PERMANENTLY not synced — [uri] is a local file:// path from the camera/
- *  gallery picker that wouldn't resolve on another device without uploading it somewhere first.
- *  A Firebase Storage-backed version of this was built and verified working, but Firebase now
- *  requires the paid Blaze plan (a billing account) to create a Storage bucket at all, even for
- *  usage that stays within its free tier — out of step with this project's "stays free" goal, so
- *  that version was reverted rather than kept as permanently-broken dead code. See CHANGELOG. */
+/**
+ * A reference photo attached to a chore showing what "done" should look like. A chore can have
+ * several. [uri] is a local content:// uri (FileProvider, for ones captured here, or a persisted
+ * gallery-picker uri) that wouldn't resolve on another device as-is — synced via ChorePhotoSync,
+ * which embeds a downscaled, compressed copy directly in its Firestore document rather than
+ * uploading to Firebase Storage. A Storage-backed version of this was built and verified working
+ * once, but Storage now requires the paid Blaze plan (a billing account) just to create a bucket at
+ * all, even for usage that stays within its free tier — out of step with this project's "stays
+ * free" goal, so that version was reverted. See CHANGELOG.
+ *
+ * Id is a client-generated UUID string, same reasoning as [Chore.id] — lets every device agree on
+ * the same Firestore document for the same photo without a round-trip.
+ */
 @Entity(
     tableName = "chore_photos",
     foreignKeys = [
@@ -66,7 +72,7 @@ data class Chore(
     ],
 )
 data class ChorePhoto(
-    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    @PrimaryKey val id: String = java.util.UUID.randomUUID().toString(),
     val choreId: String,
     val uri: String,
     val addedAt: Long = System.currentTimeMillis(),
