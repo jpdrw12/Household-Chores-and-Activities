@@ -397,8 +397,15 @@ class Repository(private val db: AppDatabase, householdId: String, context: andr
                         )
                     }
                 }
-            }
+            }.sortedBy { it.period.sortRank() }
         }
+    }
+
+    private fun DayPeriod?.sortRank(): Int = when (this) {
+        null -> 0
+        DayPeriod.MORNING -> 1
+        DayPeriod.AFTERNOON -> 2
+        DayPeriod.NIGHT -> 3
     }
 
     /** Toggles a roadmap task's completion by delegating to whichever table [PlanTask.itemType]

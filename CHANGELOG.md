@@ -8,6 +8,13 @@ below).
 
 ## [Unreleased]
 
+## [0.14.1] - 2026-10-07
+
+### Changed
+- Mapper roadmap now sorts by assigned time of day: untagged tasks first, then Morning, Afternoon,
+  Night. Within the same period (or within "untagged"), order still follows the manual drag
+  sequence — tagging doesn't erase that, it just groups by period first.
+
 ## [0.14.0] - 2026-10-07
 
 ### Added

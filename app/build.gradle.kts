@@ -26,8 +26,8 @@ android {
         applicationId = "com.jpdrw.household"
         minSdk = 24
         targetSdk = 34
-        versionCode = 21
-        versionName = "0.14.0"
+        versionCode = 22
+        versionName = "0.14.1"
 
         vectorDrawables { useSupportLibrary = true }
     }
