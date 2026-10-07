@@ -8,7 +8,23 @@ below).
 
 ## [Unreleased]
 
-## [0.13.0] - 2026-10-03
+## [0.14.0] - 2026-10-07
+
+### Added
+- Mapper roadmap tasks now have a checkbox — checking one off reads from and writes back to the
+  same completion state as the item's own tab (Chores/Activities/For Us), not a separate flag.
+- Each roadmap task can be tagged Morning/Afternoon/Night (tap again to clear). Purely a label for
+  now — doesn't reorder or group the list.
+
+### Changed
+- `reorderPlan` now takes the full reordered task list instead of just type/id pairs, so a drag
+  reorder preserves each task's period label instead of wiping it (plan entries used to be deleted
+  and fully reinserted on every reorder).
+
+### Internal
+- `PlanEntry` gained a nullable `period` column (`DayPeriod`: MORNING/AFTERNOON/NIGHT) — destructive
+  schema bump, DB version 16 → 17.
+
 
 ### Changed
 - "For Us" tab: Intimate is now a third mutually-exclusive tab alongside Parents and Family & Kids,

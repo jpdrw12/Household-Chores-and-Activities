@@ -4,6 +4,7 @@ import androidx.room.TypeConverter
 import com.jpdrw.household.data.entity.ActivityCategory
 import com.jpdrw.household.data.entity.ActivitySlot
 import com.jpdrw.household.data.entity.BudgetTier
+import com.jpdrw.household.data.entity.DayPeriod
 import com.jpdrw.household.data.entity.Frequency
 import com.jpdrw.household.data.entity.ParentalAudience
 import com.jpdrw.household.data.entity.PlanItemType
@@ -44,4 +45,9 @@ class Converters {
     fun planItemTypeToString(value: PlanItemType): String = value.name
     @TypeConverter
     fun stringToPlanItemType(value: String): PlanItemType = PlanItemType.valueOf(value)
+
+    @TypeConverter
+    fun dayPeriodToString(value: DayPeriod?): String? = value?.name
+    @TypeConverter
+    fun stringToDayPeriod(value: String?): DayPeriod? = value?.let { DayPeriod.valueOf(it) }
 }

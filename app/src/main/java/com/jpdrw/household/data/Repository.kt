@@ -10,6 +10,7 @@ import com.jpdrw.household.data.entity.ChoreOccurrence
 import com.jpdrw.household.data.entity.ChorePhoto
 import com.jpdrw.household.data.entity.ChoreSubtask
 import com.jpdrw.household.data.entity.ChoreSubtaskCheck
+import com.jpdrw.household.data.entity.DayPeriod
 import com.jpdrw.household.data.entity.FamilyActivity
 import com.jpdrw.household.data.entity.FamilyActivityLog
 import com.jpdrw.household.data.entity.Frequency
@@ -54,9 +55,15 @@ data class PlanTask(
     val itemId: String,
     val title: String,
     val subtitle: String,
+    /** The due date this task's completion should be recorded against — for a CHORE this may be
+     *  earlier than the viewed day if it's overdue; for other types it's just the viewed day. */
+    val effectiveDueDate: String,
+    val completed: Boolean = false,
     val isSpicy: Boolean = false,
     /** True for a PARENTAL_ACTIVITY whose scheduledDate matches the Mapper's selected date — highlighted in the roadmap. */
     val isScheduledToday: Boolean = false,
+    /** Only meaningful once placed in a day's roadmap — null until assigned on the Mapper tab. */
+    val period: DayPeriod? = null,
 )
 
 private fun audienceLabel(audience: ParentalAudience): String = when (audience) {
@@ -301,39 +308,112 @@ class Repository(private val db: AppDatabase, householdId: String, context: andr
         ) { chores, overdueChores, familyActs, parentalActs, planned ->
             val plannedKeys = planned.map { it.itemType to it.itemId }.toSet()
             buildList {
-                (chores + overdueChores).forEach { c -> add(PlanTask(PlanItemType.CHORE, c.chore.id, c.chore.title, c.assigneeName)) }
-                familyActs.forEach { a -> add(PlanTask(PlanItemType.FAMILY_ACTIVITY, a.id, a.title, if (a.category == ActivityCategory.INDOOR) "Indoor" else "Outdoor")) }
-                parentalActs.forEach { a -> add(PlanTask(PlanItemType.PARENTAL_ACTIVITY, a.id, a.title, audienceLabel(a.audience), isSpicy = a.isSpicy, isScheduledToday = a.scheduledDate == date)) }
+                (chores + overdueChores).forEach { c ->
+                    add(PlanTask(PlanItemType.CHORE, c.chore.id, c.chore.title, c.assigneeName, effectiveDueDate = c.effectiveDueDate))
+                }
+                familyActs.forEach { a ->
+                    add(PlanTask(PlanItemType.FAMILY_ACTIVITY, a.id, a.title, if (a.category == ActivityCategory.INDOOR) "Indoor" else "Outdoor", effectiveDueDate = date))
+                }
+                parentalActs.forEach { a ->
+                    add(
+                        PlanTask(
+                            PlanItemType.PARENTAL_ACTIVITY, a.id, a.title, audienceLabel(a.audience),
+                            effectiveDueDate = date, isSpicy = a.isSpicy, isScheduledToday = a.scheduledDate == date,
+                        ),
+                    )
+                }
             }.filter { (it.itemType to it.itemId) !in plannedKeys }
         }
 
-    /** Tasks placed into [date]'s roadmap, in order, regardless of completion state. */
-    fun observeDayPlan(date: String): Flow<List<PlanTask>> =
-        combine(
+    private data class DayPlanBase(
+        val entries: List<PlanEntry>,
+        val chores: List<Chore>,
+        val assignees: List<Assignee>,
+        val familyActs: List<FamilyActivity>,
+        val parentalActs: List<ParentalActivity>,
+    )
+
+    /** Chore id -> (the due date its completion is actually recorded against, whether it's
+     *  completed for that date) — same "last scheduled date on or before today" logic the Chores
+     *  screen itself uses, so a chore placed in the roadmap while overdue stays correctly linked
+     *  to its real due date rather than today's. */
+    private fun choreStatusForDate(date: String): Flow<Map<String, Pair<String, Boolean>>> {
+        val day = LocalDate.parse(date)
+        val rangeStart = day.minusDays(MAX_OVERDUE_LOOKBACK_DAYS.toLong()).format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE)
+        return combine(db.choreDao().observeActive(), db.choreDao().observeOccurrencesBetween(rangeStart, date)) { chores, occurrences ->
+            val occByKey = occurrences.associateBy { it.choreId to it.dueDate }
+            chores.associate { chore ->
+                val lastDue = (lastScheduledDateOnOrBefore(chore, day) ?: day).toString()
+                chore.id to (lastDue to (occByKey[chore.id to lastDue]?.completed == true))
+            }
+        }
+    }
+
+    /** Tasks placed into [date]'s roadmap, in order, with each one's real completion state (kept
+     *  in sync with its own tab — checking a task off here checks it off there too) and its
+     *  assigned [DayPeriod], if any. */
+    fun observeDayPlan(date: String): Flow<List<PlanTask>> {
+        val isoWeek = DateUtils.isoWeek(LocalDate.parse(date))
+        val statuses = combine(
+            choreStatusForDate(date),
+            db.familyActivityDao().observeLogsForDate(date),
+            db.parentalActivityDao().observeLogsForWeek(isoWeek),
+        ) { choreInfo, familyLogs, parentalLogs ->
+            Triple(choreInfo, familyLogs.filter { it.done }.map { it.activityId }.toSet(), parentalLogs.filter { it.done }.map { it.activityId }.toSet())
+        }
+        val base = combine(
             db.planDao().observeForDate(date),
             db.choreDao().observeActive(),
             db.assigneeDao().observeAll(),
             db.familyActivityDao().observeActive(),
             db.parentalActivityDao().observeActive(),
-        ) { entries, chores, assignees, familyActs, parentalActs ->
-            val choresById = chores.associateBy { it.id }
-            val assigneeNames = assignees.associateBy { it.id }
-            val familyById = familyActs.associateBy { it.id }
-            val parentalById = parentalActs.associateBy { it.id }
-            entries.sortedBy { it.sortOrder }.mapNotNull { entry ->
+        ) { entries, chores, assignees, familyActs, parentalActs -> DayPlanBase(entries, chores, assignees, familyActs, parentalActs) }
+
+        return combine(base, statuses) { b, (choreInfo, familyDone, parentalDone) ->
+            val choresById = b.chores.associateBy { it.id }
+            val assigneeNames = b.assignees.associateBy { it.id }
+            val familyById = b.familyActs.associateBy { it.id }
+            val parentalById = b.parentalActs.associateBy { it.id }
+            b.entries.sortedBy { it.sortOrder }.mapNotNull { entry ->
                 when (entry.itemType) {
                     PlanItemType.CHORE -> choresById[entry.itemId]?.let { c ->
-                        PlanTask(PlanItemType.CHORE, c.id, c.title, assigneeNames[c.assigneeId]?.name ?: "Family")
+                        val (effDate, completed) = choreInfo[c.id] ?: (date to false)
+                        PlanTask(
+                            PlanItemType.CHORE, c.id, c.title, assigneeNames[c.assigneeId]?.name ?: "Family",
+                            effectiveDueDate = effDate, completed = completed, period = entry.period,
+                        )
                     }
                     PlanItemType.FAMILY_ACTIVITY -> familyById[entry.itemId]?.let { a ->
-                        PlanTask(PlanItemType.FAMILY_ACTIVITY, a.id, a.title, if (a.category == ActivityCategory.INDOOR) "Indoor" else "Outdoor")
+                        PlanTask(
+                            PlanItemType.FAMILY_ACTIVITY, a.id, a.title, if (a.category == ActivityCategory.INDOOR) "Indoor" else "Outdoor",
+                            effectiveDueDate = date, completed = a.id in familyDone, period = entry.period,
+                        )
                     }
                     PlanItemType.PARENTAL_ACTIVITY -> parentalById[entry.itemId]?.let { a ->
-                        PlanTask(PlanItemType.PARENTAL_ACTIVITY, a.id, a.title, audienceLabel(a.audience), isSpicy = a.isSpicy, isScheduledToday = a.scheduledDate == entry.date)
+                        PlanTask(
+                            PlanItemType.PARENTAL_ACTIVITY, a.id, a.title, audienceLabel(a.audience),
+                            effectiveDueDate = date, completed = a.id in parentalDone, isSpicy = a.isSpicy,
+                            isScheduledToday = a.scheduledDate == entry.date, period = entry.period,
+                        )
                     }
                 }
             }
         }
+    }
+
+    /** Toggles a roadmap task's completion by delegating to whichever table [PlanTask.itemType]
+     *  actually points at, so it stays in sync with the item's own tab (Chores/Activities/For Us)
+     *  instead of tracking a separate completion flag here. */
+    suspend fun setPlanItemCompleted(task: PlanTask, completed: Boolean) {
+        when (task.itemType) {
+            PlanItemType.CHORE -> setChoreCompleted(task.itemId, task.effectiveDueDate, completed, null, null)
+            PlanItemType.FAMILY_ACTIVITY -> setFamilyActivityDone(task.itemId, task.effectiveDueDate, completed)
+            PlanItemType.PARENTAL_ACTIVITY -> setParentalActivityDone(task.itemId, DateUtils.isoWeek(LocalDate.parse(task.effectiveDueDate)), completed)
+        }
+    }
+
+    suspend fun setPlanPeriod(date: String, itemType: PlanItemType, itemId: String, period: DayPeriod?) =
+        db.planDao().setPeriod(date, itemType, itemId, period)
 
     suspend fun addToPlan(date: String, itemType: PlanItemType, itemId: String) {
         val dao = db.planDao()
@@ -343,11 +423,11 @@ class Repository(private val db: AppDatabase, householdId: String, context: andr
 
     suspend fun removeFromPlan(date: String, itemType: PlanItemType, itemId: String) = db.planDao().deleteEntry(date, itemType, itemId)
 
-    suspend fun reorderPlan(date: String, orderedItems: List<Pair<PlanItemType, String>>) {
+    suspend fun reorderPlan(date: String, orderedTasks: List<PlanTask>) {
         val dao = db.planDao()
         dao.deleteAllForDate(date)
-        orderedItems.forEachIndexed { index, (itemType, itemId) ->
-            dao.insert(PlanEntry(date = date, itemType = itemType, itemId = itemId, sortOrder = index))
+        orderedTasks.forEachIndexed { index, task ->
+            dao.insert(PlanEntry(date = date, itemType = task.itemType, itemId = task.itemId, sortOrder = index, period = task.period))
         }
     }
 

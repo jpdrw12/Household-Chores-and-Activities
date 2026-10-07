@@ -11,6 +11,7 @@ import com.jpdrw.household.data.entity.Assignee
 import com.jpdrw.household.data.entity.Chore
 import com.jpdrw.household.data.entity.ChoreOccurrence
 import com.jpdrw.household.data.entity.ChorePhoto
+import com.jpdrw.household.data.entity.DayPeriod
 import com.jpdrw.household.data.entity.PlanEntry
 import com.jpdrw.household.data.entity.PlanItemType
 import com.jpdrw.household.data.entity.ChoreSubtask
@@ -63,6 +64,9 @@ interface PlanDao {
 
     @Query("SELECT MAX(sortOrder) FROM plan_entries WHERE date = :date")
     suspend fun maxSortOrder(date: String): Int?
+
+    @Query("UPDATE plan_entries SET period = :period WHERE date = :date AND itemType = :itemType AND itemId = :itemId")
+    suspend fun setPeriod(date: String, itemType: PlanItemType, itemId: String, period: DayPeriod?)
 }
 
 @Dao

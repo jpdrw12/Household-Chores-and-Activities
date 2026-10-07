@@ -147,10 +147,18 @@ data class ChoreOccurrence(
 
 enum class PlanItemType { CHORE, FAMILY_ACTIVITY, PARENTAL_ACTIVITY }
 
+/** A rough time-of-day label for a roadmap task — distinct from [ActivitySlot], which is a fixed
+ *  categorization baked into a FamilyActivity template itself; this is a free label any plan entry
+ *  can carry, set per day on the Mapper tab, independent of what kind of item it is. */
+enum class DayPeriod { MORNING, AFTERNOON, NIGHT }
+
 /** One task (chore, family activity, or "For Us" activity) placed into a given day's roadmap, in
- *  order. Lets a day's available tasks be strung together into a sequence on the Mapper tab,
- *  independent of completion state. No FK here since [itemId] points at a different table
- *  depending on [itemType].
+ *  order. Lets a day's available tasks be strung together into a sequence on the Mapper tab.
+ *  [period] is an optional time-of-day label (see [DayPeriod]); completion itself isn't tracked
+ *  here — it's read from and written back to whichever table [itemType] actually points at
+ *  (Repository.setPlanItemCompleted), so checking a task off here and checking it off on its own
+ *  tab stay in sync. No FK here since [itemId] points at a different table depending on
+ *  [itemType].
  *
  *  itemId is a String, matching every item type's own id (Chore/FamilyActivity/ParentalActivity
  *  all moved from autoincrement Long to a UUID string for Firestore sync). */
@@ -161,6 +169,7 @@ data class PlanEntry(
     val itemType: PlanItemType,
     val itemId: String,
     val sortOrder: Int,
+    val period: DayPeriod? = null,
 )
 
 enum class ActivityCategory { INDOOR, OUTDOOR }
